@@ -91,6 +91,34 @@ enum SCHED_CAUSE {
 	SCHED_USER /**< @brief User-space code called yield */
 };
 
+/** 
+	@brief The process thread control block
+    
+	Here we must define the PTCB Struct like the TCB Above
+	The struct must be included in the kernel_proc and kernel 
+    thread files!
+    */
+
+typedef struct process_thread_control_block {
+	//This is the new code
+	TCB* tcb;	/**< @brief This is a pointer to dependant TCB*/
+  	Task task;	/**< @brief This is a pointer to a function*/
+  	int argl;  	/**< @brief Amount of arguments*/
+  	void* args;	/**< @brief The arguments*/
+  	
+  	int exitval;
+  
+  	int exited;		//flag to show if the thread has exited
+  	int detached;  // flag to show if detached( cannot be joined by another thread?)  
+  
+  	CondVar exit_cv; 
+    
+    int refcount;  // shows how many threads(from the same parent pcb) have joined this thread
+  	
+  	rlnode ptcb_list_node; /**< @brief Pointer to next node on PTCB list*/
+
+} PTCB;
+
 /**
   @brief The thread control block
 
@@ -100,12 +128,14 @@ enum SCHED_CAUSE {
 typedef struct thread_control_block {
 
 	PCB* owner_pcb; /**< @brief This is null for a free TCB */
-
+	
+  	PTCB* ptcb; 	/**< @brief Pointer to owner PTCB */
+    
 	cpu_context_t context; /**< @brief The thread context */
 	Thread_type type; /**< @brief The type of thread */
 	Thread_state state; /**< @brief The state of the thread */
 	Thread_phase phase; /**< @brief The phase of the thread */
-
+	
 	void (*thread_func)(); /**< @brief The initial function executed by this thread */
 
 	TimerDuration wakeup_time; /**< @brief The time this thread will be woken up by the scheduler */
@@ -281,3 +311,4 @@ void initialize_scheduler(void);
 /** @} */
 
 #endif
+
