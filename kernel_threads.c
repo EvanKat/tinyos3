@@ -53,7 +53,7 @@ void sys_ThreadExit(int exitval)
 
   @param ptcb The pointer to the ptcb
   */
-void rcdec(struct PTCB* ptcb){
+void rcdec(PTCB* ptcb){
   ptcb->refcount --;
   if(ptcb->refcount == 0){
     free(ptcb);
@@ -69,15 +69,14 @@ void rcdec(struct PTCB* ptcb){
 
   @param ptcb The pointed ptcb
 */
-void rcinc(struct PTCB* ptcb){
+void rcinc(PTCB* ptcb){
     ptcb->refcount++;
 }
 
 
 /*This is the  function that allocates space and does the basic initialisation
 	for a new PTCB. It is our intention to be */
-struct PTCB* new_ptcb(Task task, int argl, void* args){
-  //xmalloc space here
+PTCB* new_ptcb(Task task, int argl, void* args){
 	PTCB*	ptcb = xmalloc(sizeof(PTCB));  // allocate space for the new PTCB
   //init fields here
 	ptcb->exited=0;
