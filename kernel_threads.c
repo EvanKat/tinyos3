@@ -76,18 +76,18 @@ void rcinc(struct PTCB* ptcb){
 
 /*This is the  function that allocates space and does the basic initialisation
 	for a new PTCB. It is our intention to be */
-struct PTCB* new_ptcb(){
+struct PTCB* new_ptcb(Task task, int argl, void* args,){
   //xmalloc space here
 	PTCB*	ptcb = xmalloc(sizeof(PTCB));  // allocate space for the new PTCB
   //init fields here
-	ptcb->tcb = NULL /*Dont know yet how to link the PTCB with the TCB.We could
-										 could call the spawn_thread() now(??)*/
 	ptcb->exited=0;
 	ptcb->detached=0;
+	ptcb->task=task;
+	ptcb->argl=argl;
+	ptcb->args=args;
 	//ptcb->exit_cv ??
-	
-  //set refcount 1(use rcinc()?)
-	rcinc(ptcb);
+
+	rcinc(ptcb);  // increment refcount pointer
 
   return ptcb;
 }
