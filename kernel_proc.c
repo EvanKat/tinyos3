@@ -4,6 +4,7 @@
 #include "kernel_proc.h"
 #include "kernel_streams.h"
 #include "kernel_sched.h"  //added it to include PTCB structure
+#include "kernel_threads.h" 
 
 
 /*
