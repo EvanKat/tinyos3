@@ -135,9 +135,11 @@ Pid_t sys_Exec(Task call, int argl, void* args)
   
   /* The new process PCB */
   newproc = acquire_PCB();
-
+  
   if(newproc == NULL) goto finish;  /* We have run out of PIDs! */
 
+  newproc->thread_count=0; // Initialize thread_count if process created
+  
   if(get_pid(newproc)<=1) {
     /* Processes with pid<=1 (the scheduler and the init process) 
        are parentless and are treated specially. */
@@ -151,7 +153,7 @@ Pid_t sys_Exec(Task call, int argl, void* args)
     /* Add new process to the parent's child list */
     newproc->parent = curproc;
     rlist_push_front(& curproc->children_list, & newproc->children_node);
-
+    
     /* Inherit file streams from parent */
     for(int i=0; i<MAX_FILEID; i++) {
        newproc->FIDT[i] = curproc->FIDT[i];
@@ -159,7 +161,7 @@ Pid_t sys_Exec(Task call, int argl, void* args)
           FCB_incref(newproc->FIDT[i]);
     }
   }
-
+  
 
   /* Set the main thread's function */
   newproc->main_task = call;
@@ -172,7 +174,8 @@ Pid_t sys_Exec(Task call, int argl, void* args)
   }
   else
     newproc->args=NULL;
-
+//TODO: Init PTCB_list & thread_count
+  
   /* 
     Create and wake up the thread for the main function. This must be the last thing
     we do, because once we wakeup the new thread it may run! so we need to have finished
@@ -180,6 +183,21 @@ Pid_t sys_Exec(Task call, int argl, void* args)
    */
   if(call != NULL) {
     newproc->main_thread = spawn_thread(newproc, start_main_thread);
+
+    newproc->thread_count++;
+    
+    /*
+    If call==NULL then no need of TCB creation and no nead of PTCB
+    ->If above is wrong how we pass TCB to PTCB?
+    */
+    PTCB* new_ptcb;
+    new_ptcb=new_ptcb(call,argl,args);
+    //rlnode_push_front(&newproc->ptcb_list, new_ptcb);
+    //TODO: Needs initialisation!
+    
+    new_ptcb->ptcb_list_node= NULL;  //or can point to parent PCB
+    new_ptcb->tcb=newproc->main_thread;
+    
     wakeup(newproc->main_thread);
   }
 
