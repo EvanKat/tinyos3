@@ -6,7 +6,7 @@
 #include "kernel_sched.h"  //added it to include PTCB structure
 
 
-/* 
+/*
  The process table and related system calls:
  - Exec
  - Exit
@@ -132,16 +132,17 @@ void start_main_thread()
 Pid_t sys_Exec(Task call, int argl, void* args)
 {
   PCB *curproc, *newproc;
-  
+
   /* The new process PCB */
   newproc = acquire_PCB();
-  
+
   if(newproc == NULL) goto finish;  /* We have run out of PIDs! */
 
   newproc->thread_count=0; // Initialize thread_count if process created
-  
+  rlnode_init(&newproc->ptcb_list,NULL);  // NULL cause its the head!
+
   if(get_pid(newproc)<=1) {
-    /* Processes with pid<=1 (the scheduler and the init process) 
+    /* Processes with pid<=1 (the scheduler and the init process)
        are parentless and are treated specially. */
     newproc->parent = NULL;
   }
@@ -153,7 +154,7 @@ Pid_t sys_Exec(Task call, int argl, void* args)
     /* Add new process to the parent's child list */
     newproc->parent = curproc;
     rlist_push_front(& curproc->children_list, & newproc->children_node);
-    
+
     /* Inherit file streams from parent */
     for(int i=0; i<MAX_FILEID; i++) {
        newproc->FIDT[i] = curproc->FIDT[i];
@@ -161,7 +162,7 @@ Pid_t sys_Exec(Task call, int argl, void* args)
           FCB_incref(newproc->FIDT[i]);
     }
   }
-  
+
 
   /* Set the main thread's function */
   newproc->main_task = call;
@@ -175,8 +176,8 @@ Pid_t sys_Exec(Task call, int argl, void* args)
   else
     newproc->args=NULL;
 //TODO: Init PTCB_list & thread_count
-  
-  /* 
+
+  /*
     Create and wake up the thread for the main function. This must be the last thing
     we do, because once we wakeup the new thread it may run! so we need to have finished
     the initialization of the PCB.
@@ -185,19 +186,21 @@ Pid_t sys_Exec(Task call, int argl, void* args)
     newproc->main_thread = spawn_thread(newproc, start_main_thread);
 
     newproc->thread_count++;
-    
+
     /*
     If call==NULL then no need of TCB creation and no nead of PTCB
     ->If above is wrong how we pass TCB to PTCB?
     */
-    PTCB* new_ptcb;
+    PTCB* new_ptcb;  //the address of the new PTCB
     new_ptcb=new_ptcb(call,argl,args);
-    //rlnode_push_front(&newproc->ptcb_list, new_ptcb);
-    //TODO: Needs initialisation!
     
     new_ptcb->ptcb_list_node= NULL;  //or can point to parent PCB
-    new_ptcb->tcb=newproc->main_thread;
-    
+    new_ptcb->tcb=newproc->main_thread;  // link PTCB--->TCB
+
+    newproc->mainthread->ptcb = new_ptcb;  // link PTCB<-----TCB
+
+    rlist_push_back(&newproc->ptcb_list, new_ptcb->ptcb_list_node);  // CAREFULL: link PCB--->PTCB
+
     wakeup(newproc->main_thread);
   }
 
@@ -252,9 +255,9 @@ static Pid_t wait_for_specific_child(Pid_t cpid, int* status)
   /* Ok, child is a legal child of mine. Wait for it to exit. */
   while(child->pstate == ALIVE)
     kernel_wait(& parent->child_exit, SCHED_USER);
-  
+
   cleanup_zombie(child, status);
-  
+
 finish:
   return cpid;
 }
@@ -275,7 +278,7 @@ static Pid_t wait_for_any_child(int* status)
     has_exited = ! is_rlist_empty(& parent->exited_list);
     if( has_exited ) break;
 
-    kernel_wait(& parent->child_exit, SCHED_USER);    
+    kernel_wait(& parent->child_exit, SCHED_USER);
   }
 
   if(no_children)
@@ -312,9 +315,9 @@ void sys_Exit(int exitval)
   /* First, store the exit status */
   curproc->exitval = exitval;
 
-  /* 
-    Here, we must check that we are not the init task. 
-    If we are, we must wait until all child processes exit. 
+  /*
+    Here, we must check that we are not the init task.
+    If we are, we must wait until all child processes exit.
    */
   if(get_pid(curproc)==1) {
 
@@ -322,7 +325,7 @@ void sys_Exit(int exitval)
 
   } else {
 
-    /* Reparent any children of the exiting process to the 
+    /* Reparent any children of the exiting process to the
        initial task */
     PCB* initpcb = get_pcb(1);
     while(!is_rlist_empty(& curproc->children_list)) {
@@ -331,7 +334,7 @@ void sys_Exit(int exitval)
       rlist_push_front(& initpcb->children_list, child);
     }
 
-    /* Add exited children to the initial task's exited list 
+    /* Add exited children to the initial task's exited list
        and signal the initial task */
     if(!is_rlist_empty(& curproc->exited_list)) {
       rlist_append(& initpcb->exited_list, &curproc->exited_list);
@@ -348,8 +351,8 @@ void sys_Exit(int exitval)
   assert(is_rlist_empty(& curproc->exited_list));
 
 
-  /* 
-    Do all the other cleanup we want here, close files etc. 
+  /*
+    Do all the other cleanup we want here, close files etc.
    */
 
   /* Release the args data */
@@ -382,4 +385,3 @@ Fid_t sys_OpenInfo()
 {
 	return NOFILE;
 }
-
