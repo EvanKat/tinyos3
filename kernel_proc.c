@@ -4,7 +4,7 @@
 #include "kernel_proc.h"
 #include "kernel_streams.h"
 #include "kernel_sched.h"  //added it to include PTCB structure
-#include "kernel_threads.h" 
+#include "kernel_threads.h"
 
 
 /*
@@ -194,13 +194,13 @@ Pid_t sys_Exec(Task call, int argl, void* args)
     */
     PTCB* ptcb_new;  //the address of the new PTCB
     ptcb_new=new_ptcb(call,argl,args);
-    
-    ptcb_new->ptcb_list_node= NULL;  //or can point to parent PCB
+
+    rlnode_init(&ptcb_new->ptcb_list_node, ptcb_new);  //or can point to parent PCB
     ptcb_new->tcb=newproc->main_thread;  // link PTCB--->TCB
 
     newproc->main_thread->ptcb = ptcb_new;  // link PTCB<-----TCB
 
-    rlist_push_back(&newproc->ptcb_list, ptcb_new->ptcb_list_node);  // CAREFULL: link PCB--->PTCB
+    rlist_push_back(&newproc->ptcb_list, &ptcb_new->ptcb_list_node);  // CAREFULL: link PCB--->PTCB
 
     wakeup(newproc->main_thread);
   }
