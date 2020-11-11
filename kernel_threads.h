@@ -4,6 +4,6 @@
 
 PTCB* new_ptcb(Task task, int argl, void* args);
 
-void rcdec(PTCB* ptcb)
+void rcdec(PTCB* ptcb);
 
-void rcinc(PTCB* ptcb)
+void rcinc(PTCB* ptcb);
