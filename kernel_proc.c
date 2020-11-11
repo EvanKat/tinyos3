@@ -192,15 +192,15 @@ Pid_t sys_Exec(Task call, int argl, void* args)
     If call==NULL then no need of TCB creation and no nead of PTCB
     ->If above is wrong how we pass TCB to PTCB?
     */
-    PTCB* new_ptcb;  //the address of the new PTCB
-    new_ptcb=new_ptcb(call,argl,args);
+    PTCB* ptcb_new;  //the address of the new PTCB
+    ptcb_new=new_ptcb(call,argl,args);
     
-    new_ptcb->ptcb_list_node= NULL;  //or can point to parent PCB
-    new_ptcb->tcb=newproc->main_thread;  // link PTCB--->TCB
+    ptcb_new->ptcb_list_node= NULL;  //or can point to parent PCB
+    ptcb_new->tcb=newproc->main_thread;  // link PTCB--->TCB
 
-    newproc->mainthread->ptcb = new_ptcb;  // link PTCB<-----TCB
+    newproc->main_thread->ptcb = ptcb_new;  // link PTCB<-----TCB
 
-    rlist_push_back(&newproc->ptcb_list, new_ptcb->ptcb_list_node);  // CAREFULL: link PCB--->PTCB
+    rlist_push_back(&newproc->ptcb_list, ptcb_new->ptcb_list_node);  // CAREFULL: link PCB--->PTCB
 
     wakeup(newproc->main_thread);
   }
