@@ -25,7 +25,9 @@ void start_new_thread()
   */
 Tid_t sys_CreateThread(Task task, int argl, void* args)
 {
-	//Mutex lock?
+  if(task==NULL)
+    return NOTHREAD; // In case of failure return NOTHREAD (tid 0)
+  //Mutex lock?
 
   // Current process
   PCB* curproc=CURPROC;
@@ -38,15 +40,13 @@ Tid_t sys_CreateThread(Task task, int argl, void* args)
 	rlist_push_back(&curproc->ptcb_list, &ptcb_new->ptcb_list_node);// link PTCB-->other PTCB's-->PCB
 
   // Have to change main thread
-	if(task!=NULL){
+	
   ptcb_new->tcb = spawn_thread(curproc, start_new_thread); // Link link PTCB--->TCB
   ptcb_new->tcb->ptcb = ptcb_new; // link PTCB<-----TCB
   curproc->thread_count++; // Increase thread ounter
   wakeup(ptcb_new->tcb); // Set to READY for Scheduler
 	return (Tid_t) ptcb_new->tcb; // Return Tid_t of new thread
-  }
 	//Mutex unlock?
-	return NOTHREAD; // In case of failure return NOTREAD (tid 0)
 }
 
 /**
@@ -62,6 +62,13 @@ Tid_t sys_ThreadSelf()
   */
 int sys_ThreadJoin(Tid_t tid, int* exitval)
 {
+  /*
+    Find thread's PTCB by tid (findptcb)
+    
+
+
+
+  */
 	return -1;
 }
 
@@ -70,12 +77,14 @@ int sys_ThreadJoin(Tid_t tid, int* exitval)
   */
 int sys_ThreadDetach(Tid_t tid)
 {
-//   PTCB* ptcb = findptcb(tid) // could uses rlist_find()
+  PTCB* ptcb = find_ptcb(tid);
 
   if ( ptcb == NULL || ptcb->exited == 1 || tid == NOTHREAD )
     return -1;
 
-  ptcb->refcount = 0;
+  //TODO: 
+
+  ptcb->refcount = 1;
   ptcb->detached = 1;
   Cond_Broadcast(&ptcb->exit_cv);
 
