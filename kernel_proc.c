@@ -195,7 +195,8 @@ Pid_t sys_Exec(Task call, int argl, void* args)
     PTCB* ptcb_new;  //the address of the new PTCB
     ptcb_new=new_ptcb(call,argl,args);
 
-    rlnode_init(&ptcb_new->ptcb_list_node, ptcb_new);  //or can point to parent PCB
+    //TODO: check if line below is needed
+    // rlnode_init(&ptcb_new->ptcb_list_node, ptcb_new);  //or can point to parent PCB
     ptcb_new->tcb=newproc->main_thread;  // link PTCB--->TCB
 
     newproc->main_thread->ptcb = ptcb_new;  // link PTCB<-----TCB

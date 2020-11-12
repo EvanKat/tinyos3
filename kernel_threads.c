@@ -4,12 +4,52 @@
 #include "kernel_proc.h"
 #include "kernel_threads.h"
 
+
+// Take the arguments of our process and ...
+
+void start_new_thread()
+{
+  int exitval;
+	//FIND the current PTCB (pointer to)
+
+	//PTCB* ptcb = rlist_pop_back(&CURPROC->ptcb_list);
+	rlnode* lptcb = rlist_pop_back(& CURPROC->ptcb_list);
+  rlist_push_back(& CURPROC->ptcb_list, lptcb);
+
+  Task call = lptcb->ptcb->task;
+  int argl =lptcb->ptcb->argl;
+  void* args = lptcb->ptcb->args;
+
+  exitval = call(argl,args);
+  Exit(exitval);
+}
+
 /**
   @brief Create a new thread in the current process.
   */
 Tid_t sys_CreateThread(Task task, int argl, void* args)
 {
+	//Mutex lock?
+
+  // Current process
+  PCB* curproc=CURPROC;
+  // Create and allocate new PTCB
+  PTCB* ptcb_new=new_ptcb(task,argl,args);
+
+	// proprietary, delete probably: ptcb_new->tcb->owner_pcb = curproc; // link PCB<-----TCB
+	//the above is done in spawn_thread() already
+
+	rlist_push_back(&curproc->ptcb_list, &ptcb_new->ptcb_list_node);// link PTCB-->other PTCB's-->PCB
+
+  // Have to change main thread
+	if(task!=NULL){
+  ptcb_new->tcb = spawn_thread(curproc, start_new_thread); // Link link PTCB--->TCB
+  ptcb_new->tcb->ptcb = ptcb_new; // link PTCB<-----TCB
+  curproc->thread_count++; // Increase thread ounter
+	}
+	//Mutex unlock?
 	return NOTHREAD;
+	//return (Tid_t) ptcb_new->tcb; ??
 }
 
 /**
@@ -84,7 +124,11 @@ PTCB* new_ptcb(Task task, int argl, void* args){
 	ptcb->detached=0;
 	ptcb->task=task;
 	ptcb->argl=argl;
-	ptcb->args=args;
+	if(args!=NULL){
+		ptcb->args=args;
+	}
+	else{ptcb->args=NULL;}
+
 	rlnode_init(&ptcb->ptcb_list_node,ptcb);  //initialisation of ptcb_list_node
 	//ptcb->exit_cv ??
 
