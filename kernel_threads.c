@@ -10,18 +10,14 @@
 void start_new_thread()
 {
   int exitval;
-	//FIND the current PTCB (pointer to)
-
-	//PTCB* ptcb = rlist_pop_back(&CURPROC->ptcb_list);
-	rlnode* lptcb = rlist_pop_back(& CURPROC->ptcb_list);
-  rlist_push_back(& CURPROC->ptcb_list, lptcb);
+  PTCB* lptcb = CURTHREAD->ptcb;  //CAREFUL! may not work and  need find PTCB
 
   Task call = lptcb->ptcb->task;
   int argl =lptcb->ptcb->argl;
   void* args = lptcb->ptcb->args;
 
   exitval = call(argl,args);
-  Exit(exitval);
+  sys_ThreadExit(exitval);
 }
 
 /**
@@ -46,10 +42,11 @@ Tid_t sys_CreateThread(Task task, int argl, void* args)
   ptcb_new->tcb = spawn_thread(curproc, start_new_thread); // Link link PTCB--->TCB
   ptcb_new->tcb->ptcb = ptcb_new; // link PTCB<-----TCB
   curproc->thread_count++; // Increase thread ounter
-	}
+  wakeup(ptcb_new->tcb); // Set to READY for Scheduler
+	return (Tid_t) ptcb_new->tcb; // Return Tid_t of new thread
+  }
 	//Mutex unlock?
-	return NOTHREAD;
-	//return (Tid_t) ptcb_new->tcb; ??
+	return NOTHREAD; // In case of failure return NOTREAD (tid 0)
 }
 
 /**
@@ -73,7 +70,16 @@ int sys_ThreadJoin(Tid_t tid, int* exitval)
   */
 int sys_ThreadDetach(Tid_t tid)
 {
-	return -1;
+//   PTCB* ptcb = findptcb(tid) // could uses rlist_find()
+
+  if ( ptcb == NULL || ptcb->exited == 1 || tid == NOTHREAD )
+    return -1;
+
+  ptcb->refcount = 0;
+  ptcb->detached = 1;
+  Cond_Broadcast(&ptcb->exit_cv);
+
+  return 0;
 }
 
 /**
