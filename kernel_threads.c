@@ -151,3 +151,28 @@ PTCB* new_ptcb(Task task, int argl, void* args){
 
   return ptcb;
 }
+
+
+
+PTCB* find_PTCB(Tid_t tid){
+/**
+
+*/
+  TCB* curr_tcb = cur_thread();
+  assert(curr_tcb != NULL);
+
+  rlnode head = curr_tcb->owner_pcb->ptcb_list;
+  assert(head != NULL);
+
+  // Find head of CURTHREAD->owner_PCB->PTCB_list
+  rlnode* ptcb_node = rlist_find(&head,(PTCB*) tid, NULL);
+  assert(ptcb_node != NULL);
+  if (ptcb_node != NULL){
+    PTCB* ptcb = (PTCB *) ptcb_node->ptcb;
+    return ptcb;
+  }
+
+  return NULL;
+}
+
+
