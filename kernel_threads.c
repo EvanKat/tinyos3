@@ -10,11 +10,12 @@
 void start_new_thread()
 {
   int exitval;
-  PTCB* lptcb = CURTHREAD->ptcb;  //CAREFUL! may not work and  need find PTCB
+  TCB* current_tcb=cur_thread();
+  PTCB* current_ptcb = current_tcb->ptcb;  //CAREFUL! may not work and  need find PTCB
 
-  Task call = lptcb->ptcb->task;
-  int argl =lptcb->ptcb->argl;
-  void* args = lptcb->ptcb->args;
+  Task call = current_ptcb->task;
+  int argl =current_ptcb->argl;
+  void* args = current_ptcb->args;
 
   exitval = call(argl,args);
   sys_ThreadExit(exitval);
@@ -40,7 +41,7 @@ Tid_t sys_CreateThread(Task task, int argl, void* args)
 	rlist_push_back(&curproc->ptcb_list, &ptcb_new->ptcb_list_node);// link PTCB-->other PTCB's-->PCB
 
   // Have to change main thread
-	
+
   ptcb_new->tcb = spawn_thread(curproc, start_new_thread); // Link link PTCB--->TCB
   ptcb_new->tcb->ptcb = ptcb_new; // link PTCB<-----TCB
   curproc->thread_count++; // Increase thread ounter
@@ -64,7 +65,7 @@ int sys_ThreadJoin(Tid_t tid, int* exitval)
 {
   /*
     Find thread's PTCB by tid (findptcb)
-    
+
 
 
 
@@ -82,7 +83,7 @@ int sys_ThreadDetach(Tid_t tid)
   if ( ptcb == NULL || ptcb->exited == 1 || tid == NOTHREAD )
     return -1;
 
-  //TODO: 
+  //TODO:
 
   ptcb->refcount = 1;
   ptcb->detached = 1;
@@ -174,5 +175,3 @@ PTCB* find_PTCB(Tid_t tid){
 
   return NULL;
 }
-
-
