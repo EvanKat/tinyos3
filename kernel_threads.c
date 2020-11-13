@@ -28,26 +28,45 @@ Tid_t sys_CreateThread(Task task, int argl, void* args)
 {
   if(task==NULL)
     return NOTHREAD; // In case of failure return NOTHREAD (tid 0)
-  //Mutex lock?
 
   // Current process
   PCB* curproc=CURPROC;
   // Create and allocate new PTCB
   PTCB* ptcb_new=new_ptcb(task,argl,args);
 
-	// proprietary, delete probably: ptcb_new->tcb->owner_pcb = curproc; // link PCB<-----TCB
-	//the above is done in spawn_thread() already
 
 	rlist_push_back(&curproc->ptcb_list, &ptcb_new->ptcb_list_node);// link PTCB-->other PTCB's-->PCB
 
-  // Have to change main thread
 
   ptcb_new->tcb = spawn_thread(curproc, start_new_thread); // Link link PTCB--->TCB
   ptcb_new->tcb->ptcb = ptcb_new; // link PTCB<-----TCB
   curproc->thread_count++; // Increase thread ounter
   wakeup(ptcb_new->tcb); // Set to READY for Scheduler
-	return (Tid_t) ptcb_new->tcb; // Return Tid_t of new thread
-	//Mutex unlock?
+	return (Tid_t) ptcb_new; // Return Tid_t of new thread
+}
+
+/**
+TODO: Evaluate if needed
+*/
+PTCB* find_PTCB(Tid_t tid){
+  
+  TCB* curr_tcb = cur_thread();
+  // assert(curr_tcb != NULL);
+
+  rlnode head = curr_tcb->owner_pcb->ptcb_list;
+  //assert(head != NULL);
+
+  // Find head of CURTHREAD->owner_PCB->PTCB_list
+  rlnode* ptcb_node = rlist_find(&head,(PTCB*) tid, NULL);
+  //assert(ptcb_node != NULL);
+  if (ptcb_node != NULL){
+    PTCB* ptcb = (PTCB *) ptcb_node->ptcb;
+    return ptcb;
+  }
+
+  return NULL;
+  
+
 }
 
 /**
@@ -78,16 +97,17 @@ int sys_ThreadJoin(Tid_t tid, int* exitval)
   */
 int sys_ThreadDetach(Tid_t tid)
 {
-  PTCB* ptcb = find_PTCB(tid);
-
-  if ( ptcb == NULL || ptcb->exited == 1 || tid == NOTHREAD )
+  if(tid== NOTHREAD)
     return -1;
 
-  //TODO:
+  // PTCB* ptcb = (PTCB*) tid;
+  PTCB* ptcb = find_PTCB(tid);
 
-  ptcb->refcount = 1;
+  if ( ptcb == NULL || ptcb->exited == 1)
+    return -1;
+
   ptcb->detached = 1;
-  Cond_Broadcast(&ptcb->exit_cv);
+  kernel_broadcast(&ptcb->exit_cv);
 
   return 0;
 }
@@ -97,6 +117,7 @@ int sys_ThreadDetach(Tid_t tid)
   */
 void sys_ThreadExit(int exitval)
 {
+  //Check 
 
 }
 
@@ -113,6 +134,7 @@ void sys_ThreadExit(int exitval)
 void rcdec(PTCB* ptcb){
   ptcb->refcount --;
   if(ptcb->refcount == 0){
+    rlist_remove(&ptcb->ptcb_list_node); //remove from list
     free(ptcb);
   }
 }
@@ -140,6 +162,7 @@ PTCB* new_ptcb(Task task, int argl, void* args){
 	ptcb->detached=0;
 	ptcb->task=task;
 	ptcb->argl=argl;
+  ptcb->refcount=0;
 	if(args!=NULL){
 		ptcb->args=args;
 	}
@@ -155,20 +178,4 @@ PTCB* new_ptcb(Task task, int argl, void* args){
 
 
 
-PTCB* find_PTCB(Tid_t tid){
-  TCB* curr_tcb = cur_thread();
-  assert(curr_tcb != NULL);
 
-  rlnode head = curr_tcb->owner_pcb->ptcb_list;
-  //assert(head != NULL);
-
-  // Find head of CURTHREAD->owner_PCB->PTCB_list
-  rlnode* ptcb_node = rlist_find(&head,(PTCB*) tid, NULL);
-  assert(ptcb_node != NULL);
-  if (ptcb_node != NULL){
-    PTCB* ptcb = (PTCB *) ptcb_node->ptcb;
-    return ptcb;
-  }
-
-  return NULL;
-}
