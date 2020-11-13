@@ -78,7 +78,7 @@ int sys_ThreadJoin(Tid_t tid, int* exitval)
   */
 int sys_ThreadDetach(Tid_t tid)
 {
-  PTCB* ptcb = find_ptcb(tid);
+  PTCB* ptcb = find_PTCB(tid);
 
   if ( ptcb == NULL || ptcb->exited == 1 || tid == NOTHREAD )
     return -1;
@@ -134,7 +134,7 @@ void rcinc(PTCB* ptcb){
 /*This is the  function that allocates space and does the basic initialisation
 	for a new PTCB. It is our intention to be */
 PTCB* new_ptcb(Task task, int argl, void* args){
-	PTCB*	ptcb = xmalloc(sizeof(PTCB));  // allocate space for the new PTCB
+	PTCB*	ptcb = xmalloc(sizeof(PTCB));  // bbbbbbb space for the new PTCB
   //init fields here
 	ptcb->exited=0;
 	ptcb->detached=0;
@@ -146,7 +146,7 @@ PTCB* new_ptcb(Task task, int argl, void* args){
 	else{ptcb->args=NULL;}
 
 	rlnode_init(&ptcb->ptcb_list_node,ptcb);  //initialisation of ptcb_list_node
-	//ptcb->exit_cv ??
+	ptcb->exit_cv = COND_INIT;
 
 	rcinc(ptcb);  // increment refcount pointer
 
@@ -156,14 +156,11 @@ PTCB* new_ptcb(Task task, int argl, void* args){
 
 
 PTCB* find_PTCB(Tid_t tid){
-/**
-
-*/
   TCB* curr_tcb = cur_thread();
   assert(curr_tcb != NULL);
 
   rlnode head = curr_tcb->owner_pcb->ptcb_list;
-  assert(head != NULL);
+  //assert(head != NULL);
 
   // Find head of CURTHREAD->owner_PCB->PTCB_list
   rlnode* ptcb_node = rlist_find(&head,(PTCB*) tid, NULL);
