@@ -18,7 +18,7 @@ void start_new_thread()
   void* args = current_ptcb->args;
 
   exitval = call(argl,args);
-  sys_ThreadExit(exitval);
+  ThreadExit(exitval);
 }
 
 /**
