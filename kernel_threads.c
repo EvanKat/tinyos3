@@ -49,31 +49,30 @@ Tid_t sys_CreateThread(Task task, int argl, void* args)
 /**
 TODO: Evaluate if needed
 */
-PTCB* find_PTCB(Tid_t tid){
+// PTCB* find_PTCB(Tid_t tid){
   
-  TCB* curr_tcb = cur_thread();
-  // assert(curr_tcb != NULL);
+//   TCB* curr_tcb = cur_thread();
 
-  rlnode head = curr_tcb->owner_pcb->ptcb_list;
-  //assert(head != NULL);
+//   rlnode head = CURPROC->ptcb_list;
+ 
 
-  // Find head of CURTHREAD->owner_PCB->PTCB_list
-  rlnode* ptcb_node = rlist_find(&head,(PTCB*) tid, NULL);
-  //assert(ptcb_node != NULL);
-  if (ptcb_node != NULL){
-    PTCB* ptcb = ptcb_node->ptcb;
-    return ptcb;
-  }
+//   // Find head of CURTHREAD->owner_PCB->PTCB_list
+//   rlnode* ptcb_node = rlist_find(&head,(PTCB*) tid, NULL);
 
-  return NULL;
-}
+//   if (ptcb_node != NULL){
+//     PTCB* ptcb = ptcb_node->ptcb;
+//     return ptcb;
+//   }
+
+//   return NULL;
+// }
 
 /**
   @brief Return the Tid of the current thread.
  */
 Tid_t sys_ThreadSelf()
 {
-	return (Tid_t) cur_thread();
+	return (Tid_t) cur_thread()->ptcb;
 }
 
 /**
@@ -101,14 +100,20 @@ int sys_ThreadDetach(Tid_t tid)
 
   PTCB* ptcb_to_detach = (PTCB*) tid;
 
-  PTCB* ptcb_found = find_PTCB(tid);
+  if(rlist_find(& CURPROC->ptcb_list, ptcb_to_detach, NULL) != NULL && ptcb_to_detach->exited == 0){
+    ptcb_to_detach->detached = 1;
+    // Wake threads waiting for cv 
+    kernel_broadcast(&ptcb_to_detach->exit_cv);
+    return 0;
+  }
 
-  if (ptcb_found == NULL || ptcb_to_detach->exited == 1)
-    return -1;
+  // if (ptcb_found == NULL || ptcb_to_detach->exited == 1)
+  //   return -1;
 
-  ptcb_to_detach->detached = 1;
-  kernel_broadcast(&ptcb_to_detach->exit_cv);
-  return 0;
+  // ptcb_to_detach->detached = 1;
+  // kernel_broadcast(&ptcb_to_detach->exit_cv);
+  // return 0;
+  return -1;
 }
 
 /**
