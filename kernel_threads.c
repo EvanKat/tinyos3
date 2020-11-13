@@ -50,11 +50,11 @@ Tid_t sys_CreateThread(Task task, int argl, void* args)
 TODO: Evaluate if needed
 */
 // PTCB* find_PTCB(Tid_t tid){
-  
+
 //   TCB* curr_tcb = cur_thread();
 
 //   rlnode head = CURPROC->ptcb_list;
- 
+
 
 //   // Find head of CURTHREAD->owner_PCB->PTCB_list
 //   rlnode* ptcb_node = rlist_find(&head,(PTCB*) tid, NULL);
@@ -82,16 +82,17 @@ int sys_ThreadJoin(Tid_t tid, int* exitval)
 {
   PTCB* new_ptcb = (PTCB*) tid;
 
+  //----------------Thread belongs to CURPROC----------------------Thread not Self-----------ThreadNotDetached-----
   if(rlist_find(& CURPROC->ptcb_list, new_ptcb, NULL)!=NULL && tid != sys_ThreadSelf() && new_ptcb->detached == 0) {
 
     rcinc(new_ptcb); // increase ref counter by 1
 
-    while (new_ptcb->exited != 1 && new_ptcb->detached != 1) // wait till new ptcb is exited or detached. 
+    while (new_ptcb->exited != 1 && new_ptcb->detached != 1) // wait till new ptcb is exited or detached.
     {
       kernel_wait(&new_ptcb->exit_cv, SCHED_USER);
     }
 
-    if(exitval!= NULL ){ //add comments here/ ask around
+    if(exitval!= NULL ){ //try not to write at invalid space
         *exitval = new_ptcb->exitval;
     }
 
@@ -114,7 +115,7 @@ int sys_ThreadDetach(Tid_t tid)
 
   if(rlist_find(& CURPROC->ptcb_list, ptcb_to_detach, NULL) != NULL && ptcb_to_detach->exited == 0){
     ptcb_to_detach->detached = 1;
-    // Wake threads waiting for cv 
+    // Wake threads waiting for cv
     kernel_broadcast(&ptcb_to_detach->exit_cv);
     return 0;
   }
@@ -133,7 +134,7 @@ int sys_ThreadDetach(Tid_t tid)
   */
 void sys_ThreadExit(int exitval)
 {
-  //Check 
+  
 
 }
 
@@ -191,7 +192,3 @@ PTCB* new_ptcb(Task task, int argl, void* args){
 
   return ptcb;
 }
-
-
-
-
