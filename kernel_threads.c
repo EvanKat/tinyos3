@@ -80,14 +80,26 @@ Tid_t sys_ThreadSelf()
   */
 int sys_ThreadJoin(Tid_t tid, int* exitval)
 {
-  /*
-    Find thread's PTCB by tid (findptcb)
+  PTCB* new_ptcb = (PTCB*) tid;
 
+  if(rlist_find(& CURPROC->ptcb_list, new_ptcb, NULL)!=NULL && tid != sys_ThreadSelf() && new_ptcb->detached == 0) {
 
+    rcinc(new_ptcb); // increase ref counter by 1
 
+    while (new_ptcb->exited != 1 && new_ptcb->detached != 1) // wait till new ptcb is exited or detached. 
+    {
+      kernel_wait(&new_ptcb->exit_cv, SCHED_USER);
+    }
 
-  */
-	return -1;
+    if(exitval!= NULL ){ //add comments here/ ask around
+        *exitval = new_ptcb->exitval;
+    }
+
+    rcdec(new_ptcb); //since it is detached or exited, decrease rf counter and possibly remove new_ptcb from list/free it
+
+    return 0;
+  }
+  return -1;
 }
 
 /**
