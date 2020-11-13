@@ -3,6 +3,7 @@
 #include "kernel_sched.h"
 #include "kernel_proc.h"
 #include "kernel_threads.h"
+#include "kernel_cc.h"
 
 
 // Take the arguments of our process and ...
@@ -60,13 +61,11 @@ PTCB* find_PTCB(Tid_t tid){
   rlnode* ptcb_node = rlist_find(&head,(PTCB*) tid, NULL);
   //assert(ptcb_node != NULL);
   if (ptcb_node != NULL){
-    PTCB* ptcb = (PTCB *) ptcb_node->ptcb;
+    PTCB* ptcb = ptcb_node->ptcb;
     return ptcb;
   }
 
   return NULL;
-  
-
 }
 
 /**
@@ -97,18 +96,18 @@ int sys_ThreadJoin(Tid_t tid, int* exitval)
   */
 int sys_ThreadDetach(Tid_t tid)
 {
-  if(tid== NOTHREAD)
+  if(tid == NOTHREAD)
     return -1;
 
-  // PTCB* ptcb = (PTCB*) tid;
-  PTCB* ptcb = find_PTCB(tid);
+  PTCB* ptcb_to_detach = (PTCB*) tid;
 
-  if ( ptcb == NULL || ptcb->exited == 1)
+  PTCB* ptcb_found = find_PTCB(tid);
+
+  if (ptcb_found == NULL || ptcb_to_detach->exited == 1)
     return -1;
 
-  ptcb->detached = 1;
-  kernel_broadcast(&ptcb->exit_cv);
-
+  ptcb_to_detach->detached = 1;
+  kernel_broadcast(&ptcb_to_detach->exit_cv);
   return 0;
 }
 
