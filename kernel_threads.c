@@ -27,45 +27,29 @@ void start_new_thread()
   */
 Tid_t sys_CreateThread(Task task, int argl, void* args)
 {
-  if(task==NULL)
-    return NOTHREAD; // In case of failure return NOTHREAD (tid 0)
-
   // Current process
   PCB* curproc=CURPROC;
+
+  if(task==NULL)
+    return NOTHREAD; // In case of failure return NOTHREAD (tid 0)
+  //Mutex lock?
+
+
   // Create and allocate new PTCB
   PTCB* ptcb_new=new_ptcb(task,argl,args);
+  // proprietary, delete probably: ptcb_new->tcb->owner_pcb = curproc; // link PCB<-----TCB
+  //the above is done in spawn_thread() already
+  rlist_push_back(&curproc->ptcb_list, &ptcb_new->ptcb_list_node);// link PTCB-->other PTCB's-->PCB
 
-
-	rlist_push_back(&curproc->ptcb_list, &ptcb_new->ptcb_list_node);// link PTCB-->other PTCB's-->PCB
-
+  // Have to change main thread
 
   ptcb_new->tcb = spawn_thread(curproc, start_new_thread); // Link link PTCB--->TCB
   ptcb_new->tcb->ptcb = ptcb_new; // link PTCB<-----TCB
   curproc->thread_count++; // Increase thread ounter
   wakeup(ptcb_new->tcb); // Set to READY for Scheduler
-	return (Tid_t) ptcb_new; // Return Tid_t of new thread
+  return (Tid_t) ptcb_new; // Return Tid_t of new thread
+  
 }
-
-/**
-TODO: Evaluate if needed
-*/
-// PTCB* find_PTCB(Tid_t tid){
-
-//   TCB* curr_tcb = cur_thread();
-
-//   rlnode head = CURPROC->ptcb_list;
-
-
-//   // Find head of CURTHREAD->owner_PCB->PTCB_list
-//   rlnode* ptcb_node = rlist_find(&head,(PTCB*) tid, NULL);
-
-//   if (ptcb_node != NULL){
-//     PTCB* ptcb = ptcb_node->ptcb;
-//     return ptcb;
-//   }
-
-//   return NULL;
-// }
 
 /**
   @brief Return the Tid of the current thread.
@@ -82,22 +66,27 @@ int sys_ThreadJoin(Tid_t tid, int* exitval)
 {
   PTCB* new_ptcb = (PTCB*) tid;
 
-  //----------------Thread belongs to CURPROC----------------------Thread not Self-----------ThreadNotDetached-----
-  if(rlist_find(& CURPROC->ptcb_list, new_ptcb, NULL)!=NULL && tid != sys_ThreadSelf() && new_ptcb->detached == 0) {
+  if(rlist_find(&CURPROC->ptcb_list, new_ptcb, NULL) != NULL && tid != sys_ThreadSelf() && new_ptcb->detached == 0) {
 
-    rcinc(new_ptcb); // increase ref counter by 1
+    new_ptcb->refcount++; // increase ref counter by 1
 
-    while (new_ptcb->exited != 1 && new_ptcb->detached != 1) // wait till new ptcb is exited or detached.
+    while (new_ptcb->exited != 1 && new_ptcb->detached != 1) // wait till new ptcb is exited or detached. 
     {
       kernel_wait(&new_ptcb->exit_cv, SCHED_USER);
     }
 
-    if(exitval!= NULL ){ //try not to write at invalid space
-        *exitval = new_ptcb->exitval;
+    new_ptcb->refcount--; //since it is detached or exited, decrease rf counter and possibly remove new_ptcb from list/free it
+
+    if(exitval!= NULL ) //get the exitval
+      *exitval = new_ptcb->exitval;
+
+    if(new_ptcb->detached != 0)
+      return -1;
+
+    if(new_ptcb->refcount == 0){
+      rlist_remove(&new_ptcb->ptcb_list_node); //remove from list
+      free(new_ptcb);
     }
-
-    rcdec(new_ptcb); //since it is detached or exited, decrease rf counter and possibly remove new_ptcb from list/free it
-
     return 0;
   }
   return -1;
@@ -134,41 +123,69 @@ int sys_ThreadDetach(Tid_t tid)
   */
 void sys_ThreadExit(int exitval)
 {
-  
 
-}
+  PTCB* ptcb = (PTCB*) sys_ThreadSelf();
+      
+  ptcb->exited = 1;
+  ptcb->exitval = exitval;
+  kernel_broadcast(&ptcb->exit_cv);
 
-/**
-  @brief Decrements the refcount value at the pointed ptcb and check if islast
+  PCB* curproc = CURPROC;
+  curproc->thread_count--;
+  if ( curproc->thread_count == 0){
 
-  The function rcdec() does not return anything, it only
-  decrements the refcount value at the ptcb that the
-  argument points to, and checks if that was the last
-  reference to the struct, to deallocate it with free()
+    if (get_pid(curproc)!=1){
 
-  @param ptcb The pointer to the ptcb
-  */
-void rcdec(PTCB* ptcb){
-  ptcb->refcount --;
-  if(ptcb->refcount == 0){
-    rlist_remove(&ptcb->ptcb_list_node); //remove from list
-    free(ptcb);
+    /* Reparent any children of the exiting process to the
+       initial task */
+      PCB* initpcb = get_pcb(1);
+      while(!is_rlist_empty(& curproc->children_list)) {
+        rlnode* child = rlist_pop_front(& curproc->children_list);
+        child->pcb->parent = initpcb;
+        rlist_push_front(& initpcb->children_list, child);
+      }
+
+      /* Add exited children to the initial task's exited list
+         and signal the initial task */
+      if(!is_rlist_empty(& curproc->exited_list)) {
+        rlist_append(& initpcb->exited_list, &curproc->exited_list);
+        kernel_broadcast(& initpcb->child_exit);
+      }
+
+      /* Put me into my parent's exited list */
+      rlist_push_front(& curproc->parent->exited_list, &curproc->exited_node);
+      kernel_broadcast(& curproc->parent->child_exit);
+    }
+
+    assert(is_rlist_empty(& curproc->children_list));
+    assert(is_rlist_empty(& curproc->exited_list));
+    /*
+      Do all the other cleanup we want here, close files etc.
+     */
+
+    /* Release the args data */
+    if(curproc->args) {
+      free(curproc->args);
+      curproc->args = NULL;
+    }
+
+    /* Clean up FIDT */
+    for(int i=0;i<MAX_FILEID;i++) {
+      if(curproc->FIDT[i] != NULL) {
+        FCB_decref(curproc->FIDT[i]);
+        curproc->FIDT[i] = NULL;
+      }
+    }
+
+    /* Disconnect my main_thread */
+    curproc->main_thread = NULL;
+
+    /* Now, mark the process as exited. */
+    curproc->pstate = ZOMBIE;
   }
+  /* Bye-bye cruel world */
+  kernel_sleep(EXITED, SCHED_USER);
 }
-
-/**
-  @brief Incriments refcount of PTCB
-
-  The function rcinc() does not return anything, it only
-  increments the refcount value at the ptcb that the
-  argument points to.
-
-  @param ptcb The pointed ptcb
-*/
-void rcinc(PTCB* ptcb){
-    ptcb->refcount++;
-}
-
 
 /*This is the  function that allocates space and does the basic initialisation
 	for a new PTCB. It is our intention to be */
