@@ -11,6 +11,11 @@
 #include <valgrind/valgrind.h>
 #endif
 
+/* Initialise the global variables for MLFQ implementation
+	->Number of queues
+	->Priority Boost Threshold
+	->Scheduling Operations counter
+*/
 
 /********************************************
 	
@@ -225,6 +230,11 @@ void release_TCB(TCB* tcb)
   Both of these structures are protected by @c sched_spinlock.
 */
 
+/*
+	Here we must define the array of rlists that create the MLFQ, and comment out the SCHED list
+*/
+
+
 rlnode SCHED; /* The scheduler queue */
 rlnode TIMEOUT_LIST; /* The list of threads with a timeout */
 Mutex sched_spinlock = MUTEX_INIT; /* spinlock for scheduler queue */
@@ -267,6 +277,24 @@ static void sched_register_timeout(TCB* tcb, TimerDuration timeout)
 */
 static void sched_queue_add(TCB* tcb)
 {
+
+	/*
+		Here, we implement the algorithm for the MLFQ 
+		first:
+			-Increment number of scheduler Operations
+			-Check at which level queue we re at(our thread)(might need to use tcb->its or create new tcb field "priority")
+			-If sched_cause=sched_quantum, then put to below queue, if it exists
+			-if sched_cause = sched_io (blocked waiting for input output), put it to the above queue
+			-If sched_cause = mutex, put to lowermost, or exactly below queue
+			-Else, if sched_cause is something else, leave the priority(level) as it is
+
+		After that, we re gonna implement the priority boost:
+			-Traverse all the lists of the MLFQ 
+			-Increase the priority of all threads by 1 level(except the ones that are already in the top Queue)
+			(alternatively, we can put every thread at the first queue)
+
+		Last but not least, we have to comment out the line that adds the tcb to the SCHED list, below.
+	*/
 	/* Insert at the end of the scheduling list */
 	rlist_push_back(&SCHED, &tcb->sched_node);
 
@@ -326,6 +354,15 @@ static void sched_wakeup_expired_timeouts()
 */
 static TCB* sched_queue_select(TCB* current)
 {
+
+	/*
+		Here we have to implement the algorithm that chooses a thread from MLFQ to run:
+		-Comment out pop from SCHED operation
+		-Find the "highest priority" non-empty queue
+		-Pop and keep the element of the list we found above.
+		-Check if the thread pointed by the rlnode we popped is null
+		-If it is, make sure the next thread to be executed is the idle_thread
+	*/
 	/* Get the head of the SCHED list */
 	rlnode* sel = rlist_pop_front(&SCHED);
 
@@ -521,6 +558,12 @@ static void idle_thread()
  */
 void initialize_scheduler()
 {
+
+	/*
+		-Init each rlnode of the array of feedback Queues
+		-
+		
+	*/
 	rlnode_init(&SCHED, NULL);
 	rlnode_init(&TIMEOUT_LIST, NULL);
 }
