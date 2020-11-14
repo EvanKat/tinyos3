@@ -196,7 +196,7 @@ PTCB* new_ptcb(Task task, int argl, void* args){
 	ptcb->detached=0;
 	ptcb->task=task;
 	ptcb->argl=argl;
-  ptcb->refcount=0;
+  	ptcb->refcount=0;
 	if(args!=NULL){
 		ptcb->args=args;
 	}
@@ -204,8 +204,6 @@ PTCB* new_ptcb(Task task, int argl, void* args){
 
 	rlnode_init(&ptcb->ptcb_list_node,ptcb);  //initialisation of ptcb_list_node
 	ptcb->exit_cv = COND_INIT;
-
-	rcinc(ptcb);  // increment refcount pointer
 
   return ptcb;
 }
