@@ -12,8 +12,8 @@
 #endif
 
 //rafael
-#define NOQ  5  // Number Of Queues for the MLFQ implementation
-#define SOB  100  // Scheduling Operations Buffer: how many scheduling operations are between two priority boosts
+#define QUEUES  5  // Number Of Queues for the MLFQ implementation
+#define BOOST_THRESHOLD  100  // Scheduling Operations Buffer: how many scheduling operations are between two priority boosts
 int SCHED_OPERATIONS = 0;  // global variable to count total scheduling operations *since last boost*
 
 
@@ -241,7 +241,7 @@ void release_TCB(TCB* tcb)
 	Here we must define the array of rlists that create the MLFQ, and comment out the SCHED list
 */
 
-rlnode SCHED[NOQ];  // initialise the queues
+rlnode SCHED[QUEUES];  // initialise the queues
 //rlnode SCHED; /* The scheduler queue */
 rlnode TIMEOUT_LIST; /* The list of threads with a timeout */
 Mutex sched_spinlock = MUTEX_INIT; /* spinlock for scheduler queue */
@@ -310,23 +310,23 @@ static void sched_queue_add(TCB* tcb)
 			     /* thread is added to a queue                    */
 	// Process Selection based on Last Yield Cause
 	int current_queue= (tcb->its / QUANTUM)-1;  // used to store in which queue our thread is right now
-	if((tcb->curr_cause==SCHED_QUANTUM) && (current_queue != (NOQ-1))) // demote if not already in lowermost queue AND yielded because of QUANTUM 
+	if((tcb->curr_cause==SCHED_QUANTUM) && (current_queue != (QUEUES-1))) // demote if not already in lowermost queue AND yielded because of QUANTUM 
 		rlist_push_back(&SCHED[current_queue+1], &tcb->sched_node);  // push (insert) to lower priority queue  
 	else if((tcb->curr_cause==SCHED_IO) && (current_queue != 0))  // if the thread yielded because of I/O and we are NOT in the highest priority queue 
 		rlist_push_back(&SCHED[current_queue-1], &tcb->sched_node);
 	// else if sched cause == MUTEX, send to last queue
-	else if((tcb->curr_cause==SCHED_MUTEX) && (current_queue != (NOQ-1)))  // if yielded because of MUTEX lock, demote/push to Last Queue
-	       rlist_push_back(&SCHED[NOQ-1],&tcb->sched_node);	
+	else if((tcb->curr_cause==SCHED_MUTEX) && (current_queue != (QUEUES-1)))  // if yielded because of MUTEX lock, demote/push to Last Queue
+	       rlist_push_back(&SCHED[QUEUES-1],&tcb->sched_node);	
 	else
 		rlist_push_back(&SCHED[current_queue], &tcb->sched_node);  // push to the same priority
 
 	//rafael
 	//BOOSTING	
-	// if SCHED_OPERATIONS==SOB(scheduling operations buffer), boost priority:
+	// if SCHED_OPERATIONS==BOOST_THRESHOLD(scheduling operations buffer), boost priority:
 	// append every queue (in series) to the tompost queue
-	if(SCHED_OPERATIONS==SOB){
+	if(SCHED_OPERATIONS==BOOST_THRESHOLD){
 		int i;
-		for(i=1;i<NOQ;i++){
+		for(i=1;i<QUEUES;i++){
 			rlist_append(&SCHED[0],&SCHED[i]);
 		}
 		SCHED_OPERATIONS=0;
@@ -402,7 +402,7 @@ static TCB* sched_queue_select(TCB* current)
 	//rlnode* sel = rlist_pop_front(&SCHED);
 
 	int non_empty_list;  // value to hold the first queue found to be non empty
-	for(non_empty_list=0;non_empty_list<(NOQ-1);non_empty_list++){
+	for(non_empty_list=0;non_empty_list<(QUEUES-1);non_empty_list++){
 		if(is_rlist_empty(&SCHED[non_empty_list])!=1)
 			break;
 	}
@@ -413,7 +413,7 @@ static TCB* sched_queue_select(TCB* current)
 	// check if all the queues are empty, and respond accordingly:
 	TCB* next_thread = sel->tcb; 
 
-	if((non_empty_list==(NOQ-1))){
+	if((non_empty_list==(QUEUES-1))){
 		if(next_thread == NULL)
 			next_thread = (current->state == READY) ? current : &CURCORE.idle_thread;
 	}
@@ -617,7 +617,7 @@ void initialize_scheduler()
 	//rlnode_init(&SCHED, NULL);
 
 	int i;
-	for(i=0;i<NOQ;i++)
+	for(i=0;i<QUEUES;i++)
 		rlnode_init(&SCHED[i], NULL);
 	
 	rlnode_init(&TIMEOUT_LIST, NULL);
