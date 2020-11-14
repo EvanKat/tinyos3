@@ -242,7 +242,7 @@ void release_TCB(TCB* tcb)
 */
 
 rlnode SCHED[NOQ];  // initialise the queues
-rlnode SCHED; /* The scheduler queue */
+//rlnode SCHED; /* The scheduler queue */
 rlnode TIMEOUT_LIST; /* The list of threads with a timeout */
 Mutex sched_spinlock = MUTEX_INIT; /* spinlock for scheduler queue */
 
