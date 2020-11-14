@@ -4,7 +4,7 @@
 #include "kernel_proc.h"
 #include "kernel_threads.h"
 #include "kernel_cc.h"
-
+#include "kernel_streams.h"
 
 // Take the arguments of our process and ...
 
