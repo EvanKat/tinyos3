@@ -11,6 +11,13 @@
 #include <valgrind/valgrind.h>
 #endif
 
+//rafael
+#define NOQ  5  // Number Of Queues for the MLFQ implementation
+#define SOB  100  // Scheduling Operations Buffer: how many scheduling operations are between two priority boosts
+int SCHED_OPERATIONS = 0;  // global variable to count total scheduling operations *since last boost*
+
+
+
 /* Initialise the global variables for MLFQ implementation
 	->Number of queues
 	->Priority Boost Threshold
@@ -234,7 +241,7 @@ void release_TCB(TCB* tcb)
 	Here we must define the array of rlists that create the MLFQ, and comment out the SCHED list
 */
 
-
+rlnode SCHED[NOQ];  // initialise the queues
 rlnode SCHED; /* The scheduler queue */
 rlnode TIMEOUT_LIST; /* The list of threads with a timeout */
 Mutex sched_spinlock = MUTEX_INIT; /* spinlock for scheduler queue */
@@ -296,7 +303,35 @@ static void sched_queue_add(TCB* tcb)
 		Last but not least, we have to comment out the line that adds the tcb to the SCHED list, below.
 	*/
 	/* Insert at the end of the scheduling list */
-	rlist_push_back(&SCHED, &tcb->sched_node);
+	//rlist_push_back(&SCHED, &tcb->sched_node);
+
+	SCHED_OPERATIONS++;  /* increment the counter of scheduling operations*/
+			     /* count one scheduling operation every time one */
+			     /* thread is added to a queue                    */
+	// Process Selection based on Last Yield Cause
+	int current_queue= (tcb->its / QUANTUM)-1;  // used to store in which queue our thread is right now
+	if((tcb->curr_cause==SCHED_QUANTUM) && (current_queue != (NOQ-1))) // demote if not already in lowermost queue AND yielded because of QUANTUM 
+		rlist_push_back(&SCHED[current_queue+1], &tcb->sched_node);  // push (insert) to lower priority queue  
+	else if((tcb->curr_cause==SCHED_IO) && (current_queue != 0))  // if the thread yielded because of I/O and we are NOT in the highest priority queue 
+		rlist_push_back(&SCHED[current_queue-1], &tcb->sched_node);
+	// else if sched cause == MUTEX, send to last queue
+	else if((tcb->curr_cause==SCHED_MUTEX) && (current_queue != (NOQ-1)))  // if yielded because of MUTEX lock, demote/push to Last Queue
+	       rlist_push_back(&SCHED[NOQ-1],&tcb->sched_node);	
+	else
+		rlist_push_back(&SCHED[current_queue], &tcb->sched_node);  // push to the same priority
+
+	//rafael
+	//BOOSTING	
+	// if SCHED_OPERATIONS==SOB(scheduling operations buffer), boost priority:
+	// append every queue (in series) to the tompost queue
+	if(SCHED_OPERATIONS==SOB){
+		int i;
+		for(i=1;i<NOQ;i++){
+			rlist_append(&SCHED[0],&SCHED[i]);
+		}
+		SCHED_OPERATIONS=0;
+	}
+
 
 	/* Restart possibly halted cores */
 	cpu_core_restart_one();
@@ -364,14 +399,29 @@ static TCB* sched_queue_select(TCB* current)
 		-If it is, make sure the next thread to be executed is the idle_thread
 	*/
 	/* Get the head of the SCHED list */
-	rlnode* sel = rlist_pop_front(&SCHED);
+	//rlnode* sel = rlist_pop_front(&SCHED);
 
-	TCB* next_thread = sel->tcb; /* When the list is empty, this is NULL */
+	int non_empty_list;  // value to hold the first queue found to be non empty
+	for(non_empty_list=0;non_empty_list<(NOQ-1);non_empty_list++){
+		if(is_rlist_empty(&SCHED[non_empty_list])!=1)
+			break;
+	}
 
-	if (next_thread == NULL)
-		next_thread = (current->state == READY) ? current : &CURCORE.idle_thread;
+	// select (rlist_pop_front) the first element of first queue found to be not-empty	
+	rlnode* sel = rlist_pop_front(&SCHED[non_empty_list]);
+	
+	// check if all the queues are empty, and respond accordingly:
+	TCB* next_thread = sel->tcb; 
 
-	next_thread->its = QUANTUM;
+	if((non_empty_list==(NOQ-1))){
+		if(next_thread == NULL)
+			next_thread = (current->state == READY) ? current : &CURCORE.idle_thread;
+	}
+	
+
+	// specify number of quantums depending on queue level
+	//next_thread->its = 2*(non_empty_list+1)*QUANTUM;
+	next_thread->its = (non_empty_list+1)*QUANTUM;
 
 	return next_thread;
 }
@@ -564,7 +614,12 @@ void initialize_scheduler()
 		-
 		
 	*/
-	rlnode_init(&SCHED, NULL);
+	//rlnode_init(&SCHED, NULL);
+
+	int i;
+	for(i=0;i<NOQ;i++)
+		rlnode_init(&SCHED[i], NULL);
+	
 	rlnode_init(&TIMEOUT_LIST, NULL);
 }
 
