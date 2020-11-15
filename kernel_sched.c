@@ -302,14 +302,11 @@ static void sched_queue_add(TCB* tcb)
 
 		Last but not least, we have to comment out the line that adds the tcb to the SCHED list, below.
 	*/
-	/* Insert at the end of the scheduling list */
-	//rlist_push_back(&SCHED, &tcb->sched_node);
 
-	SCHED_OPERATIONS++;  /* increment the counter of scheduling operations*/
-			     /* count one scheduling operation every time one */
-			     /* thread is added to a queue                    */
-	// Process Selection based on Last Yield Cause
-	int current_queue= (tcb->its / QUANTUM)-1;  // used to store in which queue our thread is right now
+	SCHED_OPERATIONS++;  /*a scheduling operation is a sched queue add*/
+
+	// Priority assignment based on the last SCHED_CAUSE
+	int current_queue= (tcb->its / QUANTUM)-1;  //here we store the priority of our thread
 	if((tcb->curr_cause==SCHED_QUANTUM) && (current_queue != (QUEUES-1))) // demote if not already in lowermost queue AND yielded because of QUANTUM 
 		rlist_push_back(&SCHED[current_queue+1], &tcb->sched_node);  // push (insert) to lower priority queue  
 	else if((tcb->curr_cause==SCHED_IO) && (current_queue != 0))  // if the thread yielded because of I/O and we are NOT in the highest priority queue 
@@ -318,12 +315,11 @@ static void sched_queue_add(TCB* tcb)
 	else if((tcb->curr_cause==SCHED_MUTEX) && (current_queue != (QUEUES-1)))  // if yielded because of MUTEX lock, demote/push to Last Queue
 	       rlist_push_back(&SCHED[QUEUES-1],&tcb->sched_node);	
 	else
-		rlist_push_back(&SCHED[current_queue], &tcb->sched_node);  // push to the same priority
+		rlist_push_back(&SCHED[current_queue], &tcb->sched_node);  // leave priority as is
 
-	//rafael
-	//BOOSTING	
-	// if SCHED_OPERATIONS==BOOST_THRESHOLD(scheduling operations buffer), boost priority:
-	// append every queue (in series) to the tompost queue
+
+	// At a rate determined by BOOST_THRESHOLD, the scheduler gives a boost in the priority of low priority threads
+	// append all queues, in series, to the first queue
 	if(SCHED_OPERATIONS==BOOST_THRESHOLD){
 		int i;
 		for(i=1;i<QUEUES;i++){
@@ -398,29 +394,25 @@ static TCB* sched_queue_select(TCB* current)
 		-Check if the thread pointed by the rlnode we popped is null
 		-If it is, make sure the next thread to be executed is the idle_thread
 	*/
-	/* Get the head of the SCHED list */
-	//rlnode* sel = rlist_pop_front(&SCHED);
 
-	int non_empty_list;  // value to hold the first queue found to be non empty
+	int non_empty_list;  //the first queue found to be non empty
 	for(non_empty_list=0;non_empty_list<(QUEUES-1);non_empty_list++){
 		if(is_rlist_empty(&SCHED[non_empty_list])!=1)
 			break;
 	}
 
-	// select (rlist_pop_front) the first element of first queue found to be not-empty	
+	// select the first element of highest priority list we found to be non empty	
 	rlnode* sel = rlist_pop_front(&SCHED[non_empty_list]);
 	
-	// check if all the queues are empty, and respond accordingly:
+	// check if all the queues are empty, and if thats the case, make the core to run the idle_thread:
 	TCB* next_thread = sel->tcb; 
-
 	if((non_empty_list==(QUEUES-1))){
 		if(next_thread == NULL)
 			next_thread = (current->state == READY) ? current : &CURCORE.idle_thread;
 	}
 	
 
-	// specify number of quantums depending on queue level
-	//next_thread->its = 2*(non_empty_list+1)*QUANTUM;
+	// Quantum time is specified for each thread according its priority(high priority high quantum)
 	next_thread->its = (non_empty_list+1)*QUANTUM;
 
 	return next_thread;
@@ -611,16 +603,13 @@ void initialize_scheduler()
 
 	/*
 		-Init each rlnode of the array of feedback Queues
-		-
-		
 	*/
-	//rlnode_init(&SCHED, NULL);
 
-	int i;
-	for(i=0;i<QUEUES;i++)
-		rlnode_init(&SCHED[i], NULL);
+	int counter;
+	for(counter=0;counter<QUEUES;counter++)
+		rlnode_init(&SCHED[counter], NULL);
 	
-	rlnode_init(&TIMEOUT_LIST, NULL);
+	rlnode_init(&TIMEOUT_LIST, NULL);  //the timeout list hosts the threads that are waiting for something
 }
 
 void run_scheduler()
