@@ -12,8 +12,8 @@
 #endif
 
 //rafael
-#define QUEUES  15  // Number Of Queues for the MLFQ implementation
-#define BOOST_THRESHOLD  300  // Scheduling Operations Buffer: how many scheduling operations are between two priority boosts
+#define QUEUES  6  // Number Of Queues for the MLFQ implementation
+#define BOOST_THRESHOLD  400  // Scheduling Operations Buffer: how many scheduling operations are between two priority boosts
 int SCHED_OPERATIONS = 0;  // global variable to count total scheduling operations *since last boost*
 
 
@@ -183,6 +183,8 @@ TCB* spawn_thread(PCB* pcb, void (*func)())
 	tcb->last_cause = SCHED_IDLE;
 	tcb->curr_cause = SCHED_IDLE;
 
+	tcb->priority_level = 1; // the initialisation of MLFQ priority level.This may change at first use.
+
 	/* Compute the stack segment address and size */
 	void* sp = ((void*)tcb) + THREAD_TCB_SIZE;
 
@@ -306,7 +308,8 @@ static void sched_queue_add(TCB* tcb)
 	SCHED_OPERATIONS++;  /*a scheduling operation is a sched queue add*/
 
 	// Priority assignment based on the last SCHED_CAUSE
-	int current_queue= (tcb->its / QUANTUM)-1;  //here we store the priority of our thread
+	// int current_queue= (tcb->its / QUANTUM)-1;  //here we store the priority of our thread
+	int current_queue = tcb->priority_level;
 	if((tcb->curr_cause==SCHED_QUANTUM) && (current_queue != (QUEUES-1))) // demote if not already in lowermost queue AND yielded because of QUANTUM 
 		rlist_push_back(&SCHED[current_queue+1], &tcb->sched_node);  // push (insert) to lower priority queue  
 	else if((tcb->curr_cause==SCHED_IO) && (current_queue != 0))  // if the thread yielded because of I/O and we are NOT in the highest priority queue 
@@ -413,7 +416,8 @@ static TCB* sched_queue_select(TCB* current)
 	
 
 	// Quantum time is specified for each thread according its priority(high priority high quantum)
-	next_thread->its = (non_empty_list+1)*QUANTUM;
+	//next_thread->its = (non_empty_list+1)*QUANTUM;
+	next_thread->its = QUANTUM;
 
 	return next_thread;
 }
