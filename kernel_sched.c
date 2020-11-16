@@ -13,7 +13,7 @@
 
 //rafael
 #define QUEUES  5 // Number Of Queues for the MLFQ implementation
-#define BOOST_THRESHOLD  400  // Scheduling Operations Buffer: how many scheduling operations are between two priority boosts
+#define BOOST_THRESHOLD  300  // Scheduling Operations Buffer: how many scheduling operations are between two priority boosts
 int SCHED_OPERATIONS = 0;  // global variable to count total scheduling operations *since last boost*
 
 
@@ -326,13 +326,16 @@ static void sched_queue_add(TCB* tcb)
 	// append all queues, in series, to the first queue
 	if(SCHED_OPERATIONS==BOOST_THRESHOLD){
 		int i;
-		for(i=1;i<QUEUES;i++){
-			rlist_append(&SCHED[0],&SCHED[i]);
-		}
-		rlnode* p = SCHED[0].next;
-		while(p!=&SCHED[0]) {
-			p->tcb->priority_level = 0;
-			p = p->next;
+		for(i=0;i<QUEUES;i++){
+			if(i==QUEUES-1)
+				break;
+			rlist_append(&SCHED[i],&SCHED[i+1]);
+
+			rlnode* p = SCHED[i].next;
+			while(p!=&SCHED[i]) {
+				p->tcb->priority_level = i;
+				p = p->next;
+			}
 		}
 		SCHED_OPERATIONS=0;
 	}
