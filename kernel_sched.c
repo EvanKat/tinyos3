@@ -12,7 +12,7 @@
 #endif
 
 //rafael
-#define QUEUES  6  // Number Of Queues for the MLFQ implementation
+#define QUEUES  5 // Number Of Queues for the MLFQ implementation
 #define BOOST_THRESHOLD  400  // Scheduling Operations Buffer: how many scheduling operations are between two priority boosts
 int SCHED_OPERATIONS = 0;  // global variable to count total scheduling operations *since last boost*
 
@@ -25,7 +25,7 @@ int SCHED_OPERATIONS = 0;  // global variable to count total scheduling operatio
 */
 
 /********************************************
-	
+
 	Core table and CCB-related declarations.
 
  *********************************************/
@@ -34,14 +34,14 @@ int SCHED_OPERATIONS = 0;  // global variable to count total scheduling operatio
 CCB cctx[MAX_CORES];
 
 
-/* 
-	The current core's CCB. This must only be used in a 
+/*
+	The current core's CCB. This must only be used in a
 	non-preemtpive context.
  */
 #define CURCORE (cctx[cpu_core_id])
 
-/* 
-	The current thread. This is a pointer to the TCB of the thread 
+/*
+	The current thread. This is a pointer to the TCB of the thread
 	currently executing on this core.
 
 	This must only be used in non-preemptive context.
@@ -288,7 +288,7 @@ static void sched_queue_add(TCB* tcb)
 {
 
 	/*
-		Here, we implement the algorithm for the MLFQ 
+		Here, we implement the algorithm for the MLFQ
 		first:
 			-Increment number of scheduler Operations
 			-Check at which level queue we re at(our thread)(might need to use tcb->its or create new tcb field "priority")
@@ -298,7 +298,7 @@ static void sched_queue_add(TCB* tcb)
 			-Else, if sched_cause is something else, leave the priority(level) as it is
 
 		After that, we re gonna implement the priority boost:
-			-Traverse all the lists of the MLFQ 
+			-Traverse all the lists of the MLFQ
 			-Increase the priority of all threads by 1 level(except the ones that are already in the top Queue)
 			(alternatively, we can put every thread at the first queue)
 
@@ -307,16 +307,17 @@ static void sched_queue_add(TCB* tcb)
 
 	SCHED_OPERATIONS++;  /*a scheduling operation is a sched queue add*/
 
+
 	// Priority assignment based on the last SCHED_CAUSE
 	// int current_queue= (tcb->its / QUANTUM)-1;  //here we store the priority of our thread
 	int current_queue = tcb->priority_level;
-	if((tcb->curr_cause==SCHED_QUANTUM) && (current_queue != (QUEUES-1))) // demote if not already in lowermost queue AND yielded because of QUANTUM 
-		rlist_push_back(&SCHED[current_queue+1], &tcb->sched_node);  // push (insert) to lower priority queue  
-	else if((tcb->curr_cause==SCHED_IO) && (current_queue != 0))  // if the thread yielded because of I/O and we are NOT in the highest priority queue 
+	if((tcb->curr_cause==SCHED_QUANTUM) && (current_queue != (QUEUES-1))) // demote if not already in lowermost queue AND yielded because of QUANTUM
+		rlist_push_back(&SCHED[current_queue+1], &tcb->sched_node);  // push (insert) to lower priority queue
+	else if((tcb->curr_cause==SCHED_IO) && (current_queue != 0))  // if the thread yielded because of I/O and we are NOT in the highest priority queue
 		rlist_push_back(&SCHED[current_queue-1], &tcb->sched_node);
 	// else if sched cause == MUTEX, send to last queue
 	else if((tcb->curr_cause==SCHED_MUTEX) && (current_queue != (QUEUES-1)))  // if yielded because of MUTEX lock, demote/push to Last Queue
-	       rlist_push_back(&SCHED[QUEUES-1],&tcb->sched_node);	
+	       rlist_push_back(&SCHED[QUEUES-1],&tcb->sched_node);
 	else
 		rlist_push_back(&SCHED[current_queue], &tcb->sched_node);  // leave priority as is
 
@@ -327,6 +328,11 @@ static void sched_queue_add(TCB* tcb)
 		int i;
 		for(i=1;i<QUEUES;i++){
 			rlist_append(&SCHED[0],&SCHED[i]);
+		}
+		rlnode* p = SCHED[0].next;
+		while(p!=&SCHED[0]) {
+			p->tcb->priority_level = 0;
+			p = p->next;
 		}
 		SCHED_OPERATIONS=0;
 	}
@@ -404,16 +410,16 @@ static TCB* sched_queue_select(TCB* current)
 			break;
 	}
 
-	// select the first element of highest priority list we found to be non empty	
+	// select the first element of highest priority list we found to be non empty
 	rlnode* sel = rlist_pop_front(&SCHED[non_empty_list]);
-	
+
 	// check if all the queues are empty, and if thats the case, make the core to run the idle_thread:
-	TCB* next_thread = sel->tcb; 
+	TCB* next_thread = sel->tcb;
 	if((non_empty_list==(QUEUES-1))){
 		if(next_thread == NULL)
 			next_thread = (current->state == READY) ? current : &CURCORE.idle_thread;
 	}
-	
+
 
 	// Quantum time is specified for each thread according its priority(high priority high quantum)
 	//next_thread->its = (non_empty_list+1)*QUANTUM;
@@ -612,7 +618,7 @@ void initialize_scheduler()
 	int counter;
 	for(counter=0;counter<QUEUES;counter++)
 		rlnode_init(&SCHED[counter], NULL);
-	
+
 	rlnode_init(&TIMEOUT_LIST, NULL);  //the timeout list hosts the threads that are waiting for something
 }
 
