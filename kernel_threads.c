@@ -108,13 +108,7 @@ int sys_ThreadDetach(Tid_t tid)
     kernel_broadcast(&ptcb_to_detach->exit_cv);
     return 0;
   }
-
-  // if (ptcb_found == NULL || ptcb_to_detach->exited == 1)
-  //   return -1;
-
-  // ptcb_to_detach->detached = 1;
-  // kernel_broadcast(&ptcb_to_detach->exit_cv);
-  // return 0;
+	
   return -1;
 }
 
