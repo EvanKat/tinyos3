@@ -12,8 +12,8 @@
 #endif
 
 //rafael
-#define QUEUES  5 // Number Of Queues for the MLFQ implementation
-#define BOOST_THRESHOLD  300  // Scheduling Operations Buffer: how many scheduling operations are between two priority boosts
+#define QUEUES  6 // Number Of Queues for the MLFQ implementation
+#define BOOST_THRESHOLD  900  // Scheduling Operations Buffer: how many scheduling operations are between two priority boosts
 int SCHED_OPERATIONS = 0;  // global variable to count total scheduling operations *since last boost*
 
 
