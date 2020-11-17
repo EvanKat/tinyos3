@@ -326,9 +326,7 @@ static void sched_queue_add(TCB* tcb)
 	// append all queues, in series, to the first queue
 	if(SCHED_OPERATIONS==BOOST_THRESHOLD){
 		int i;
-		for(i=0;i<QUEUES;i++){
-			if(i==QUEUES-1)
-				break;
+		for(i=0;i<(QUEUES-1);i++){
 			rlist_append(&SCHED[i],&SCHED[i+1]);
 
 			rlnode* p = SCHED[i].next;
