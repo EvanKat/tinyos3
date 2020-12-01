@@ -7,8 +7,18 @@
   This structure holds all information pertaining to a Pipe.
  */
 typedef struct pipe_control_block {
+    /* Pointers to read/write from buffer*/
     FCB *reader, *writer;
-} Pipe_cb;
+
+    /* For blocking writer if no space is available*/
+    CondVar has_space;
+    /* For blocking reader until data are available*/ 
+    CondVar has_data;
+    /* Write and Read position in buffer*/
+    int w_position, r_position;
+    /* Bounded (cyclic) byte buffer*/
+    char BUFFER[PIPE_BUFFER_SIZE];
+} Pipe_CB;
 
 int sys_Pipe(pipe_t* pipe);
 
