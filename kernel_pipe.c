@@ -6,14 +6,14 @@ static file_ops readOperations = {
 	.Open = NULL,
 	.Read = pipe_read,
 	.Write = NULL,
-	.Close = pipe_close_reade;
+	.Close = pipe_reader_close;
 };
 
 static file_ops writeOperations = {
 	.Open = NULL,
 	.Read = NULL,
 	.Write = pipe_write,
-	.Close = pipe_close_writer
+	.Close = pipe_writer_close
 };
 
 Pipe_CB* pipe_init() {
