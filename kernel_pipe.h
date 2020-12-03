@@ -1,6 +1,8 @@
 #include "tinyos.h"
 #include "kernel_streams.h"
+/* Size of Buffer 16kB*/
 #define PIPE_BUFFER_SIZE 16384
+
 /**
   @brief Pipe Control Block.
 
