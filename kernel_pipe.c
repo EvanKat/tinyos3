@@ -26,6 +26,8 @@ Pipe_CB* pipe_init() {
 	new_Pipe_CB->w_position = 0;
 	new_Pipe_CB->r_position = 0;
 
+	new_Pipe_CB->wordlength = 0;
+
 	new_Pipe_CB->has_space = COND_INIT;
 	new_Pipe_CB->has_data = COND_INIT; 
 
@@ -75,11 +77,34 @@ int sys_Pipe(pipe_t* pipe)
 
 
 
+  /**Write operation.
 
-int pipe_write(void* pipecb_t, const char *buf, unsigned int n){
-	return -1;
+    Write up to 'size' bytes from 'buf' to the stream 'this'.
+    If it is not possible to write any data (e.g., a buffer is full),
+    the thread will block. 
+    return -> number of bytes copied from buf
+    return -> -1 on error
+
+    Possible errors are:
+    - There was a I/O runtime problem.
+  */
+int pipe_write(void* pipecb_t, const char *buf, unsigned int size){
+	//cast pipecb_t to Pipe_CB
+	Pipe_CB* pipe_cb = (Pipe_CB*)pipecb_t;
+
+	//check if we can write to the buffer
+
+	//pass 1 by 1 the buffer elements?
+		//case when there is no reader(return -1)
+		//case where writer closed
+		//reached MAX_BUFFER_SIZE(write_pointer = 0 again)
+
+	//broadkast to readers
+	//return how many bytes where written
 }
-int pipe_read(void* pipecb_t, char *buf, unsigned int n){
+
+
+int pipe_read(void* pipecb_t, char *buf, unsigned int size){
 	return -1;
 }
 
