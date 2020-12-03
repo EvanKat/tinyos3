@@ -6,7 +6,7 @@ static file_ops readOperations = {
 	.Open = NULL,
 	.Read = pipe_read,
 	.Write = NULL,
-	.Close = pipe_reader_close;
+	.Close = pipe_reader_close
 };
 
 static file_ops writeOperations = {
