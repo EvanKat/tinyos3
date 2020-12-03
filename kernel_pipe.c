@@ -44,7 +44,7 @@ int sys_Pipe(pipe_t* pipe)
 	//we give as arguments two pointers to arrays, and each of one will be filled
 	//and we can use them afterwards
 	int reserve_return_value;
-	FCB_reserve(2,fid_pipe,pipe_FCB); //TODO: check if it returns error
+	reserve_return_value = FCB_reserve(2,fid_pipe,pipe_FCB); //TODO: check if it returns error
 
 	if(reserve_return_value==-1){
 		return -1;  // in case FCB_reserve failed, return error code
