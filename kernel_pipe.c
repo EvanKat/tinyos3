@@ -1,6 +1,6 @@
 #include "tinyos.h"
 #include "kernel_pipe.h"
-#include "kernel_streams.h"
+#include "kernel_cc.h"
 
 static file_ops readOperations = {
 	.Open = NULL,
@@ -16,6 +16,7 @@ static file_ops writeOperations = {
 	.Close = pipe_writer_close
 };
 
+// Initialize new Pipe Control Block 
 Pipe_CB* pipe_init() {
 
 	Pipe_CB* new_Pipe_CB = xmalloc(sizeof(Pipe_CB)); // Space allocation of the new pipe control block
@@ -26,92 +27,165 @@ Pipe_CB* pipe_init() {
 	new_Pipe_CB->w_position = 0;
 	new_Pipe_CB->r_position = 0;
 
-	new_Pipe_CB->wordlength = 0;
-
 	new_Pipe_CB->has_space = COND_INIT;
-	new_Pipe_CB->has_data = COND_INIT; 
+	new_Pipe_CB->has_data = COND_INIT;
+
+	new_Pipe_CB->word_length = 0;
 
 	return new_Pipe_CB;
 }
 
-
-// a function to Initialise a pipe, and its connections with the 
-// corresponding FCB, PCB(through FIDT) and file_ops struct
+// pipe_t return by value
 int sys_Pipe(pipe_t* pipe)
 {
-	//These to will go as arguments in the fcb_reserve
-	Fid_t fid_pipe[2];  // *convention*-> first: writer, second: reader 
-	FCB* pipe_FCB[2];
+	// Arguments for FCB_reserve
+	Fid_t fid[2];
+	FCB* fcb[2];
 
-	//we give as arguments two pointers to arrays, and each of one will be filled
-	//and we can use them afterwards
-	int reserve_return_value;
-	reserve_return_value = FCB_reserve(2,fid_pipe,pipe_FCB); //TODO: check if it returns error
-
-	if(reserve_return_value==-1){
-		return -1;  // in case FCB_reserve failed, return error code
+	/*	If reserve return 1 continue
+	 	Make check and links PCB->Fidt and FCB 
+	*/
+	if(!FCB_reserve(2, fid, fcb)){
+		return -1;
 	}
+	// Return read & write fid
+	pipe->read = fid[0];
+	pipe->write = fid[1];
 
-	//now the above arrays have the reserved FCB's pointers from the FT,
-	//and the reserved fid_t pointers from the F
+	// Initialize new Pipe Control block
+	Pipe_CB* new_pipe_cb = pipe_init();
+	
+	fcb[0]->streamobj = new_pipe_cb;
+	fcb[1]->streamobj = new_pipe_cb;
 
-	//give the "Return" values to the pipe_t struct 
-	pipe->read = fid_pipe[1];
-	pipe->write = fid_pipe[0];
+	/*	?? The reader and writer of Pipe CB
+		already pointed by streamobj of FCB
 
-	//give values to the Pipe_CB
-	//initialise the Pipe_CB
-	Pipe_CB* new_pipe = pipe_init();
+		We can call them by FCB[*]->streamobj->writer/reader
 
-	//link the FCB to the pipe(returned above) through the streamobj
-	pipe_FCB[0]->streamobj = new_pipe;  // FCB---Pipe_CB
-	pipe_FCB[1]->streamobj = new_pipe;
+	*/ 	
+	new_pipe_cb->reader = fcb[0];
+	new_pipe_cb->writer = fcb[1];
 
-	//link the FCB to the corresponding file_ops structure
-	pipe_FCB[0]->streamfunc = &writeOperations;  //FCB---file_ops(----write() and close() )
-	pipe_FCB[1]->streamfunc = &readOperations;   
-
+	// Set the functions for read/write
+	fcb[0]->streamfunc = &writeOperations;
+	fcb[1]->streamfunc = &readOperations;
 	return 0;
-
 }
 
-
-
-  /**Write operation.
-
-    Write up to 'size' bytes from 'buf' to the stream 'this'.
-    If it is not possible to write any data (e.g., a buffer is full),
-    the thread will block. 
-    return -> number of bytes copied from buf
-    return -> -1 on error
-
-    Possible errors are:
-    - There was a I/O runtime problem.
-  */
 int pipe_write(void* pipecb_t, const char *buf, unsigned int size){
-	//cast pipecb_t to Pipe_CB
-	Pipe_CB* pipe_cb = (Pipe_CB*)pipecb_t;
+	Pipe_CB* pipe_CB = (Pipe_CB*)pipecb_t;
+	
+	if(pipe_CB==NULL || buf==NULL || size < 1 || pipe_CB->reader == NULL)
+		return -1;
 
-	//check if we can write to the buffer
+	// The stored buffers
+	int buffer_counter;
+	for(buffer_counter=0; buffer_counter <= size; buffer_counter++){	
+		
+		if(buffer_counter == size)
+			pipe_CB->buffer[pipe_CB->w_position] = "\0" ; //EOD or 0 or NULL
+		else
+			// Save the chars at current pos	
+			pipe_CB->buffer[pipe_CB->w_position] = buf[buffer_counter];
+		
+		// Inc w_position
+		pipe_CB->w_position++;
+		// Inc word length
+		pipe_CB->word_length++;
 
-	//pass 1 by 1 the buffer elements?
-		//case when there is no reader(return -1)
-		//case where writer closed
-		//reached MAX_BUFFER_SIZE(write_pointer = 0 again)
+		// If writer wrote all buffer and reader is sleeping 
+		while(pipe_CB->word_length == (int)PIPE_BUFFER_SIZE)
+			kernel_wait(&pipe_CB->has_space,SCHED_PIPE);
 
-	//broadkast to readers
-	//return how many bytes where written
+		// If buffer reached the end and need of store more data set w_position to 0 (Bounded Buffer)
+		if(pipe_CB->w_position == ((int)PIPE_BUFFER_SIZE - 1) && buffer_counter < size /*&& pipe_CB->r_position!=0*/){
+			pipe_CB->w_position = 0;
+			
+		}
+
+		// Im full of data. Take them all ;)
+		kernel_broadcast(&pipe_CB->has_data);
+	}
+	return buffer_counter;
 }
 
 
+// TODO: WTF IM writing
 int pipe_read(void* pipecb_t, char *buf, unsigned int size){
-	return -1;
+	Pipe_CB* pipe_CB = (Pipe_CB*)pipecb_t;
+	
+	if(pipe_CB==NULL || buf==NULL || size<1)
+		return -1;
+	
+	int buffer_counter;
+	for(buffer_counter=0; buffer_counter<size; buffer_counter++){
+		
+		// No data to Read
+		while(pipe_CB->word_length==0)
+			kernel_wait(&pipe_CB->has_data, SCHED_PIPE);
+
+		// Store the data that read
+		buf[buffer_counter] = pipe_CB->buffer[pipe_CB->r_position];
+		// next read position
+		pipe_CB->r_position++;
+		// word length is less
+		pipe_CB->word_length--;
+
+		// If buffer reached the end and need of store more data set w_position to 0 (Bounded Buffer)
+		// posible check wordlenght
+		if(pipe_CB->r_position == ((int)PIPE_BUFFER_SIZE - 1) && buffer_counter < size /*&& pipe_CB->r_position!=0*/){
+			pipe_CB->r_position = 0;
+		}
+		// END Of File
+		if(buf[buffer_counter] == "/0"){
+			kernel_broadcast(&pipe_CB->has_space);
+			return buffer_counter;
+		}
+
+
+		kernel_broadcast(&pipe_CB->has_space);
+	}
+	return buffer_counter;
 }
 
 int pipe_writer_close(void* _pipecb){
-	return -1;
+	Pipe_CB* pipe_CB = (Pipe_CB*)_pipecb;
+	
+	// Cases of failure 
+	// Possible no need of FCB writer check
+	if(pipe_CB == NULL && pipe_CB->writer == NULL)
+		return -1;
+	
+	// Set writer FCB to NULL
+	pipe_CB->writer = NULL;
+	// For reader to read the remaining data
+	kernel_broadcast(&pipe_CB->has_data);
+
+	// If reader fCB is NULL free pipe control block
+	if (pipe_CB->reader == NULL)
+		free(pipe_CB);
+	return 0;
 }
 
 int pipe_reader_close(void* _pipecb){
-	return -1;
+	Pipe_CB* pipe_CB = (Pipe_CB*)_pipecb;
+
+	// Cases of failure 
+	// Possible no need of FCB writer check
+	if(pipe_CB == NULL && pipe_CB->reader == NULL)
+		return -1;
+
+	// set reader FCB to null
+	pipe_CB->reader = NULL;
+
+	// say to others that reader is closed
+	// So wake the writers
+	kernel_broadcast(&pipe_CB->has_space);
+
+	// Unalocate the Pipe Control Bock if both reader-writer are closed
+	if(pipe_CB->writer == NULL)
+		free(pipe_CB);
+
+	return 0;
 }
