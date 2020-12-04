@@ -1,6 +1,6 @@
 #include "tinyos.h"
 #include "kernel_pipe.h"
-
+#include "kernel_streams.h"
 
 static file_ops readOperations = {
 	.Open = NULL,
