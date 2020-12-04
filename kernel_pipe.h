@@ -20,7 +20,11 @@ typedef struct pipe_control_block {
     int w_position, r_position;
     /* Bounded (cyclic) byte buffer*/
     char BUFFER[PIPE_BUFFER_SIZE];
+
+    int word_length;
+    
 } Pipe_CB;
+
 
 int sys_Pipe(pipe_t* pipe);
 
