@@ -91,7 +91,7 @@ int pipe_write(void* pipecb_t, const char *buf, unsigned int size){
 		//	pipe_CB->buffer[pipe_CB->w_position] = buf[buffer_counter];
 		//}
 
-		pipe_CB->buffer[pipe_CB->w_position] = buf[buffer_counter];
+		pipe_CB->BUFFER[pipe_CB->w_position] = buf[buffer_counter];
 		
 		// Inc w_position
 		pipe_CB->w_position++;
@@ -219,7 +219,7 @@ int pipe_read(void* pipecb_t, char *buf, unsigned int size){
 		}
 
 		// Store the data that read
-		buf[buffer_counter] = pipe_CB->buffer[pipe_CB->r_position];
+		buf[buffer_counter] = pipe_CB->BUFFER[pipe_CB->r_position];
 		// next read position
 		pipe_CB->r_position++;
 		// word length is less
