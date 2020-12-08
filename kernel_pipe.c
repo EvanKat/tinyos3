@@ -128,7 +128,7 @@ int pipe_read(void* pipecb_t, char *buf, unsigned int size){
 
         while(pipe_CB->word_length==0){
             if(pipe_CB->writer == NULL)
-                return 0; //or buffer_counter
+                return buffer_counter; //or 0
             // both work, depends if we return 0 when we are done or we simply return buffer_counter everytime.
             //andreas kai raf leme na gurnaei 0
             kernel_wait(&pipe_CB->has_data, SCHED_PIPE);
