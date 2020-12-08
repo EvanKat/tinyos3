@@ -5,13 +5,13 @@
 // File Operations
 static file_ops socketOperations = {
 	.Open = NULL,
-	.Read = socket_read,
-	.Write = socket_write,
-	.Close = socket_close
+	.Read = NULL /*socket_read*/,
+	.Write = NULL /*socket_write*/,
+	.Close = NULL /*socket_close*/
 };
 
 // Allocation, initialize and return a new socket control block
-SCB* new_socket(port_p p){
+SCB* new_socket(port_t p){
 	// Allocation
 	SCB* socket=xmalloc(sizeof(SCB));
 	// Initialization
@@ -25,12 +25,12 @@ SCB* new_socket(port_p p){
 	With the use of get_fcb() 
 */ 
 SCB* get_scb(Fid_t sock){
-	FCB* socket_fcb = get_fcb(Fid_t sock);
+	FCB* socket_fcb = get_fcb(sock);
 
-	if(socket_fcb == NULL)
-		return socket_fcb;
-	else 	
-		return (SCB*)socket_fcb->streamobj;
+	if(socket_fcb== NULL)
+		return NULL;
+	else
+		return socket_fcb->streamobj;
 }
 
 /**
@@ -49,7 +49,7 @@ SCB* get_scb(Fid_t sock){
 */
 Fid_t sys_Socket(port_t port)
 {	
-	// In caso of no valid Port_t
+	// In case of no valid Port_t
 	if(port < 0 || port > MAX_PORT){
 		return NOFILE;
 	}
@@ -66,7 +66,7 @@ Fid_t sys_Socket(port_t port)
 	// Initialization
 	socket->fcb = fcb;
 	fcb->streamobj = socket;
-	fcb->streamfunc = socketOperations;
+	fcb->streamfunc = &socketOperations;
 
 	// Fid through FCB_reserve 
 	return fid;
@@ -95,24 +95,22 @@ Fid_t sys_Socket(port_t port)
 int sys_Listen(Fid_t sock)
 {
 	// Get the CURPROCS SCB
-	SCB* socket = get_scb(Fid_t sock);
+	SCB* socket = get_scb(sock);
 
 	// Checks
-	if(socket == NULL || socket->port == NOPORT || PORT_MAP[socket->port] != NULL || socket->type != SOCKET_UNBOUND)
+	if(socket == NULL || socket->type != SOCKET_UNBOUND || socket->port == NOPORT || PORT_MAP[socket->port] != NULL)
 		return -1;
-
-	// Link PORT_MAP with SCB 
-	PORT_MAP[socket->port] = socket;
+	
 	// Mark the socket as Listener
 	socket->type = SOCKET_LISTENER;
-	// Initialize the header of the listeners queue
-	rlnode_init(&socket->s_type.socket_s->queue, NULL);
+	// Link PORT_MAP with SCB 
+	PORT_MAP[socket->port] = socket;
 	// Initialize the Cond_Var od socket
 	socket->s_type.socket_s->req_available = COND_INIT;
-
+	// Initialize the header of the listeners queue
+	rlnode_init(&socket->s_type.socket_s->queue, NULL);
 	return 0;
 }
-
 
 Fid_t sys_Accept(Fid_t lsock)
 {
@@ -130,4 +128,3 @@ int sys_ShutDown(Fid_t sock, shutdown_mode how)
 {
 	return -1;
 }
-
