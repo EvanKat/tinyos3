@@ -1,51 +1,76 @@
 #include "tinyos.h"
-#include "kernel_streams.h"
 #include "kernel_pipe.h"
 
+/*	First we have 2 the ubound sockets 
+	Then one become the LISTENER(1) socket through sys_Listen
+	Then the other unbound socket(2) want to Connect with the LISTENER 
 
-static SCB* PORT_MAP[MAX_PORT+1];
+	If the (1) have lot of requests then the (2) goes and in the queue
+	When time come (1)<---link--->(2) and both become peer_sockets
+*/
+// Forward declaration of SCB to get used at PEER_Socket
+typedef struct Socket_Control_Block SCB;
 
-enum socket_type{
-  SOCKET_UNBOUND,
-  SOCKET_PEER, 
-  SOCKET_LISTENER
-};
+// PORT Map table
+SCB* PORT_MAP[MAX_PORT+1];
 
+// New unbound socket 
+typedef struct unbound_socket{
+  rlnode unbound_socket;
+}unbound_st;
+
+// Listener Socket (Waits for connection)
 typedef struct listener_socket{
   rlnode queue;
   CondVar req_available;
 }listen_st;
 
-typedef struct unbound_socket{
-  rlnode unbound_socket;
-}unbound_st;
-
-typedef struct socket_control_block SCB;
-
+// Connected sockets Listener<---link--->Unbound
 typedef struct peer_socket{
   SCB* peer;
   Pipe_CB* write_pipe;
   Pipe_CB* read_pipe;
 }peer_st;
 
-typedef struct socket_control_block{
-  uint refcount;  // like the one we used in previous control blocks
-  FCB* fcb;  //points back to the parent FCB
-  enum socket_type type;
-  port_t port;
-  
-  union scb_action{
-    listen_st* socket_s;  // might not be pointers
-    unbound_st* unbound_s;
-    peer_st* peer_s;
-  } s_type;
-    
+
+// Socket type
+typedef enum socket_type{
+	SOCKET_UNBOUND,
+	SOCKET_PEER,
+	SOCKET_LISTENER
+}S_type;
+
+// Socket Control Block
+typedef struct Socket_Control_Block{
+	// Pointer to FCB reader an writete starts here
+	FCB *fcb;
+	// Reference counter (possible for listener socket)
+	uint refcount;
+	// Socket type
+	enum socket_type type;
+	// The port to bound
+	port_t port;
+
+	// Only one type of it 
+	union scb_action{
+		listen_st* socket_s;
+		unbound_st* unbound_s;
+		peer_st* peer_s;
+	}s_type;
+
 }SCB;
 
-struct connection_request{
-  int admited; // a flag that shows if the connection request is already accepted or not
-  SCB* peer;  //points to the socket that made the rekuest
-  
-  CondVar connected_cv;  // shows that its connected?maybe?
-  rlnode queue_node;  // intrusive list node. Used in the queue rlnode in the listen SCB.
-};
+
+
+// PORT Map table
+SCB* PORT_MAP[MAX_PORT+1];
+
+Fid_t sys_Socket(port_t port);
+
+int sys_Listen(Fid_t sock);
+
+Fid_t sys_Accept(Fid_t lsock);
+
+int sys_Connect(Fid_t sock, port_t port, timeout_t timeout);
+
+int sys_ShutDown(Fid_t sock, shutdown_mode how);
