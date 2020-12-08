@@ -19,7 +19,7 @@ typedef struct pipe_control_block {
     /* Write and Read position in buffer*/
     int w_position, r_position;
     /* Bounded (cyclic) byte buffer*/
-    char BUFFER[PIPE_BUFFER_SIZE];
+    char buffer[PIPE_BUFFER_SIZE];
 
     int word_length;
     
