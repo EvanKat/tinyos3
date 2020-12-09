@@ -97,13 +97,67 @@ int sys_Listen(Fid_t sock)
 
 
 
+
 Fid_t sys_Accept(Fid_t lsock)
 {
+	SCB* listener = get_scb(lsock);
+
+	// Checks
+	if(listener == NULL || listener->type != SOCKET_LISTENER)
+		return NOFILE;
+
+	listener->refcount++;
+
+	while (rlist_len(&listener->s_type.socket_s->queue) == 0 && listener->port != NOPORT){  //oso den uparxei request kai oso to port den einai noport.
+		kernel_wait(&listener->s_type.socket_s->req_available, SCHED_PIPE);
+	}
+
+	if (listener->port == NOPORT) //an o listener faei close
+		return NOFILE;
+
+	rlnode* request = rlist_pop_front(&listener->s_type.socket_s->queue);
+	c_req* conreq = request->conreq;
 
 
-	return NOFILE;
+	Fid_t serv_fid = sys_Socket(listener->port);
+
+	SCB* server = get_scb(serv_fid);
+	server->type = SOCKET_PEER;
+
+	SCB* client = conreq->peer;
+	client->type = SOCKET_PEER;
+
+    // connect peers 
+	server->s_type.peer_s->peer = client;
+	client->s_type.peer_s->peer = server;
+
+	// initialize the pipes
+	Pipe_CB* pipe1 = pipe_init();
+	Pipe_CB* pipe2 = pipe_init();
+
+	pipe1->reader = server->fcb;
+	pipe1->writer = client->fcb;
+
+	pipe2->reader = client->fcb;
+	pipe2->writer = server->fcb;
+
+	// server->fcb->streamfunc = &socketOperations;
+	// client->fcb->streamfunc = &socketOperations;
+
+	// server->s_type.peer_s->read_pipe = pipe1;
+	// server->s_type.peer_s->write_pipe = pipe2;
+
+	// client->s_type.peer_s->write_pipe = pipe1;
+	// client->s_type.peer_s->read_pipe = pipe2;
+
+	conreq->admitted=1;
+
+	listener->refcount--;
+
+	kernel_signal(&conreq->connected_cv);
+
+	return serv_fid;
 }
-
 
 
 int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
