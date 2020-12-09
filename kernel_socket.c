@@ -72,26 +72,7 @@ Fid_t sys_Socket(port_t port)
 	return fid;
 }
 
-/**
-	@brief Initialize a socket as a listening socket.
 
-	A listening socket is one which can be passed as an argument to
-	@c Accept. Once a socket becomes a listening socket, it is not
-	possible to call any other functions on it except @c Accept, @Close
-	and @c Dup2().
-
-	The socket must be bound to a port, as a result of calling @c Socket.
-	On each port there must be a unique listening socket (although any number
-	of non-listening sockets are allowed).
-
-	@param sock the socket to initialize as a listening socket
-	@returns 0 on success, -1 on error. Possible reasons for error:
-		- the file id is not legal
-		- the socket is not bound to a port
-		- the port bound to the socket is occupied by another listener
-		- the socket has already been initialized
-	@see Socket
- */
 int sys_Listen(Fid_t sock)
 {
 	// Get the CURPROCS SCB
@@ -109,18 +90,60 @@ int sys_Listen(Fid_t sock)
 	socket->s_type.socket_s->req_available = COND_INIT;
 	// Initialize the header of the listeners queue
 	rlnode_init(&socket->s_type.socket_s->queue, NULL);
+
 	return 0;
 }
 
+
+
+
 Fid_t sys_Accept(Fid_t lsock)
 {
+
+
 	return NOFILE;
 }
 
 
+
 int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
 {
-	return -1;
+	SCB* socket = get_scb(sock);  // get the pointer to our SCB struct from the Fid_t argument
+
+	if(sock->fcb == NULL || sock->type != SOCKET_LISTENER || port > MAX_PORT || port < 1 || PORT_MAP[port] != NULL){
+		return -1;
+	}
+
+	socket->refcount++; // increase refcount of SCB
+	//Build the connection request c_req
+	c_req request = xmalloc(sizeof(c_req));
+	request->admitted = 0;
+	request->peer = sock;  // point to the parent peer 
+	request->connected_cv = COND_INIT;
+	// add the request to the listener's list
+	rlist_push_back(&socket->s_type->listen_s->queue,&request->queue_node);
+	// Signal the listener that there is a request to handle!
+	kernel_signal(&socket->s_type->listen_s->req_available)  
+
+	int timeout_result;  // the result of the kernel_timedwait() will be stored here
+
+	while(request->admitted == 0){
+		//IMPORTANT: the connect() function waits in the condvar of the request(struct)
+		//When the accept() accepts the request, it has to signal that condition variable
+		//to begin the data exchange.
+		timeout_result = kernel_timedwait(request->connected_cv,SCHED_PIPE,timeout);
+		if (timeout_result==0){
+			// the above condition satisfied means (not sure) that the kernel wait was timed out
+			return -1;
+		}
+	}
+
+	//decrease socket refcount
+	socket->refcount--;
+
+
+
+	return 0;
 }
 
 
