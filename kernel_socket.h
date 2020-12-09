@@ -14,6 +14,14 @@ typedef struct Socket_Control_Block SCB;
 // PORT Map table
 SCB* PORT_MAP[MAX_PORT+1];
 
+struct connection_request{
+  int admited; // a flag that shows if the connection request is already accepted or not
+  SCB* peer;  //points to the socket that made the rekuest
+  
+  CondVar connected_cv;  // shows that its connected?maybe?
+  rlnode queue_node;  // intrusive list node. Used in the queue rlnode in the listen SCB.
+}c_req;
+
 // New unbound socket 
 typedef struct unbound_socket{
   rlnode unbound_socket;
