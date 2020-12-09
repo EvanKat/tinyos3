@@ -2,6 +2,7 @@
 #include "tinyos.h"
 #include "kernel_socket.h"
 
+
 // File Operations
 static file_ops socketOperations = {
 	.Open = NULL,
@@ -87,9 +88,9 @@ int sys_Listen(Fid_t sock)
 	// Link PORT_MAP with SCB 
 	PORT_MAP[socket->port] = socket;
 	// Initialize the Cond_Var od socket
-	socket->s_type.socket_s->req_available = COND_INIT;
+	socket->s_type.listen_s->req_available = COND_INIT;
 	// Initialize the header of the listeners queue
-	rlnode_init(&socket->s_type.socket_s->queue, NULL);
+	rlnode_init(&socket->s_type.listen_s->queue, NULL);
 
 	return 0;
 }
@@ -108,14 +109,14 @@ Fid_t sys_Accept(Fid_t lsock)
 
 	listener->refcount++;
 
-	while (rlist_len(&listener->s_type.socket_s->queue) == 0 && listener->port != NOPORT){  //oso den uparxei request kai oso to port den einai noport.
-		kernel_wait(&listener->s_type.socket_s->req_available, SCHED_PIPE);
+	while (rlist_len(&listener->s_type.listen_s->queue) == 0 && listener->port != NOPORT){  //oso den uparxei request kai oso to port den einai noport.
+		kernel_wait(&listener->s_type.listen_s->req_available, SCHED_PIPE);
 	}
 
 	if (listener->port == NOPORT) //an o listener faei close
 		return NOFILE;
 
-	rlnode* request = rlist_pop_front(&listener->s_type.socket_s->queue);
+	rlnode* request = rlist_pop_front(&listener->s_type.listen_s->queue);
 	c_req* conreq = request->conreq;
 
 
@@ -164,7 +165,7 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
 {
 	SCB* socket = get_scb(sock);  // get the pointer to our SCB struct from the Fid_t argument
 
-	if(sock->fcb == NULL || sock->type != SOCKET_LISTENER || port > MAX_PORT || port < 1 || PORT_MAP[port] != NULL){
+	if(socket->fcb == NULL || socket->type != SOCKET_LISTENER || port > MAX_PORT || port < 1 || PORT_MAP[port] != NULL){
 		return -1;
 	}
 
@@ -174,12 +175,14 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
 	request->admitted = 0;
 	request->peer = sock;  // point to the parent peer 
 	request->connected_cv = COND_INIT;
+	//initialise the rlnode of the request to point to itself(intrusive lists u know)
+	rlnode_init(&request->queue_node,&request);
 	// add the request to the listener's list
 	rlist_push_back(&socket->s_type->listen_s->queue,&request->queue_node);
 	// Signal the listener that there is a request to handle!
-	kernel_signal(&socket->s_type->listen_s->req_available)  
+	kernel_signal(&socket->s_type->listen_s->req_available); 
 
-	int timeout_result;  // the result of the kernel_timedwait() will be stored here
+	timeout_t timeout_result;  // the result of the kernel_timedwait() will be stored here
 
 	while(request->admitted == 0){
 		//IMPORTANT: the connect() function waits in the condvar of the request(struct)
