@@ -46,13 +46,12 @@ int socket_close(void* scb_t){
 
 	return 0;
 }
-
-// File Operations
+//FILE OPERATIONS
 static file_ops socketOperations = {
 	.Open = NULL,
-	.Read = NULL /*socket_read*/,
-	.Write = NULL /*socket_write*/,
-	.Close = NULL /*socket_close*/
+	.Read = socket_read,
+	.Write = socket_write,
+	.Close = socket_close
 };
 
 // Allocation, initialize and return a new socket control block
@@ -118,7 +117,7 @@ Fid_t sys_Socket(port_t port)
 	// Initialization
 	socket->fcb = fcb;
 	socket->fcb->streamobj = socket;
-	socket->fcb->streamfunc = NULL;
+	socket->fcb->streamfunc = &socketOperations;
 
 	// Fid through FCB_reserve 
 	return fid;
