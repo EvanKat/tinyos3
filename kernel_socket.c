@@ -206,5 +206,23 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
 
 int sys_ShutDown(Fid_t sock, shutdown_mode how)
 {
+
+	SCB* scb = get_scb(sock);
+
+	if( scb == NULL || scb->type != SOCKET_PEER)
+		return -1;
+
+	switch(how){
+		case SHUTDOWN_READ:
+			return pipe_reader_close(scb->s_type.peer_s->read_pipe);
+		case SHUTDOWN_WRITE:
+			return pipe_writer_close(scb->s_type.peer_s->write_pipe);
+		case SHUTDOWN_BOTH:
+			if(pipe_reader_close(scb->s_type.peer_s->read_pipe) == 0 && pipe_writer_close(scb->s_type.peer_s->write_pipe) == 0)
+				return 0;
+			return -1;
+		default:
+			return -1;
+	}
 	return -1;
 }
