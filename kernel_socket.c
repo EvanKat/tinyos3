@@ -362,3 +362,25 @@ int sys_ShutDown(Fid_t sock, shutdown_mode how)
 	}
 	return -1;
 }
+
+
+// TODO: use this instead of refcount-- in the code
+
+// A function to decrement the refcount SCB counter and 
+// delete/free the space if no one points to the arg SCB
+void decref_SCB(SCB * socket_cb){
+	socket_cb->refcount--;
+	//If therefcount == 0, do one of three cases:
+	if(socket_cb->refcount == 0){
+		if(socket_cb->type == SOCKET_PEER){ // if its a non-reffered-anywhered peer, it has no purpose
+			free(socket_cb->s_type.peer_s);
+			free(socket_cb);
+			}
+		if(socket_cb->type == SOCKET_UNBOUND)
+			free(socket_cb);
+		if(socket_cb->type == SOCKET_LISTENER){
+			free(socket_cb->s_type.listener_s);
+			free(socket_cb);
+		}
+	}
+}
