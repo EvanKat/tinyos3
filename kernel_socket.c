@@ -26,7 +26,7 @@ int socket_close(void* scb_t){
 
 	switch(scb->type){
 		case SOCKET_LISTENER:
-			while(is_rlist_empty(&scb->s_type.listen_s->queue == 0) ){
+			while(is_rlist_empty(&scb->s_type.listen_s->queue) == 0){
 				rlnode* trash  = rlist_pop_front(&scb->s_type.listen_s->queue);
 				kernel_signal(&trash->c_req->connected_cv);
 			}
