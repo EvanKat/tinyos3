@@ -2,6 +2,50 @@
 #include "tinyos.h"
 #include "kernel_socket.h"
 
+int socket_read(void* scb_t, char *buf, unsigned int size){
+	SCB* scb=(SCB*) scb_t;
+	if(scb == NULL ||scb->type != SOCKET_PEER)
+		return -1;
+
+	return pipe_read(scb->s_type.peer_s->read_pipe, buf, size);
+}
+
+int socket_write(void* scb_t, const char *buf, unsigned int size){
+	SCB* scb=(SCB*) scb_t;
+	if(scb == NULL || scb->type != SOCKET_PEER)
+		return -1;
+
+	return pipe_write(scb->s_type.peer_s->write_pipe, buf, size);
+}
+	
+int socket_close(void* scb_t){
+	SCB* scb=(SCB*) scb_t;
+
+	if(scb == NULL)
+		return -1;
+
+	switch(scb->type){
+		case SOCKET_LISTENER:
+			while(is_rlist_empty(&scb->s_type.listen_s->queue == 0) ){
+				rlnode* trash  = rlist_pop_front(&scb->s_type.listen_s->queue);
+				kernel_signal(&trash->c_req->connected_cv);
+			}
+			PORT_MAP[scb->port] = NULL;
+			kernel_signal(&scb->s_type.listen_s->req_available);
+			break;
+		case SOCKET_PEER:
+			pipe_writer_close( scb->s_type.peer_s->write_pipe );
+			pipe_reader_close( scb->s_type.peer_s->read_pipe );
+			break;
+		default:
+			break;
+	}
+	scb->refcount--;
+	if (scb->refcount == 0)
+		free(scb);
+
+	return 0;
+}
 
 // File Operations
 static file_ops socketOperations = {
