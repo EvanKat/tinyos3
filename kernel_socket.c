@@ -254,8 +254,6 @@ Fid_t sys_Accept(Fid_t lsock)
 	   - the port does not have a listening socket bound to it by @c Listen.
 	   - the timeout has expired without a successful connection.
 */
-// sock -> listener sock
-// TODO: change the socket to PORT_MAP[port] and possible make the connection of Fid_t sock link to PORT_MAP[port]
 int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
 {	
 	// Get the pointer to our SCB struct from the Fid_t argument
@@ -273,12 +271,15 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
 	// Point to the parent peer 
 	request->peer = socket; 
 	request->connected_cv = COND_INIT;
+
+	//Get the listener SCB from the specified(arg) port 
+	SCB* listener_scb = PORT_MAP[port]
 	//initialise the rlnode of the request to point to itself(intrusive lists u know)
-	rlnode_init(&request->queue_node, &request);
+	rlnode_init(&listener_scb->queue_node, &request);
 	// Add the request to the listener's list
-	rlist_push_back(&socket->s_type.listen_s->queue, &request->queue_node);
+	rlist_push_back(&listener_scb->s_type.listen_s->queue, &request->queue_node);
 	// Signal the listener that there is a request to handle!
-	kernel_signal(&socket->s_type.listen_s->req_available); 
+	kernel_signal(&listener_scb->s_type.listen_s->req_available); 
 
 	// How it works
 	// The result of the kernel_timedwait() will be stored here
@@ -291,6 +292,9 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
 		timeout_result = kernel_timedwait(&request->connected_cv, SCHED_PIPE, timeout);
 		if (timeout_result==0){
 			// the above condition satisfied means (not sure) that the kernel wait was timed out
+			// so we remove the request from the listener scb list and free its space
+			rlist_remove(&request->queue_node)
+			free(request)
 			return -1;
 		}
 	}
