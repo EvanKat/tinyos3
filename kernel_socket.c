@@ -379,7 +379,7 @@ void decref_SCB(SCB * socket_cb){
 		if(socket_cb->type == SOCKET_UNBOUND)
 			free(socket_cb);
 		if(socket_cb->type == SOCKET_LISTENER){
-			free(socket_cb->s_type.listener_s);
+			free(socket_cb->s_type.listen_s);
 			free(socket_cb);
 		}
 	}
