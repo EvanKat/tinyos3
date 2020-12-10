@@ -131,62 +131,64 @@ Fid_t sys_Accept(Fid_t lsock)
 {
 	SCB* listener = get_scb(lsock);
 
- 	// Checks
- 	if(listener == NULL || listener->type != SOCKET_LISTENER)
- 		return NOFILE;
+	// Checks
+	if(listener == NULL || listener->type != SOCKET_LISTENER)
+		return NOFILE;
 
-// 	listener->refcount++;
+	listener->refcount++;
 
-// 	while (rlist_len(&listener->s_type.listen_s->queue) == 0 && listener->port != NOPORT){  //oso den uparxei request kai oso to port den einai noport.
-// 		kernel_wait(&listener->s_type.listen_s->req_available, SCHED_PIPE);
-// 	}
+	while (rlist_len(&listener->s_type.listen_s->queue) == 0 && listener->port != NOPORT){  //oso den uparxei request kai oso to port den einai noport.
+		kernel_wait(&listener->s_type.listen_s->req_available, SCHED_PIPE);
+	}
 
- 	if (listener->port == NOPORT) //an o listener faei close
- 		return NOFILE;
+	if (listener->port == NOPORT) //an o listener faei close
+		return NOFILE;
 
- 	rlnode* request = rlist_pop_front(&listener->s_type.listen_s->queue);
- 	c_req* conreq = request->c_req;
+	rlnode* request = rlist_pop_front(&listener->s_type.listen_s->queue);
+	c_req* conreq = request->conreq; // DUNNO
 
 
-// 	Fid_t serv_fid = sys_Socket(listener->port);
+	Fid_t serv_fid = sys_Socket(listener->port);
 
-// 	SCB* server = get_scb(serv_fid);
-// 	server->type = SOCKET_PEER;
+	SCB* server = get_scb(serv_fid);
+	server->type = SOCKET_PEER;
 
-// 	SCB* client = conreq->peer;
-// 	client->type = SOCKET_PEER;
+	SCB* client = conreq->peer;
+	client->type = SOCKET_PEER;
 
-//     // connect peers 
-// 	server->s_type.peer_s->peer = client;
-// 	client->s_type.peer_s->peer = server;
+    // connect peers 
+	server->s_type.peer_s->peer = client;
+	client->s_type.peer_s->peer = server;
 
-// 	// initialize the pipes
-// 	Pipe_CB* pipe1 = pipe_init();
-// 	Pipe_CB* pipe2 = pipe_init();
+	// initialize the pipes
+	Pipe_CB* pipe1 = pipe_init();
+	Pipe_CB* pipe2 = pipe_init();
 
-// 	pipe1->reader = server->fcb;
-// 	pipe1->writer = client->fcb;
+	pipe1->reader = server->fcb;
+	pipe1->writer = client->fcb;
 
-// 	pipe2->reader = client->fcb;
-// 	pipe2->writer = server->fcb;
+	pipe2->reader = client->fcb;
+	pipe2->writer = server->fcb;
 
-// 	server->fcb->streamfunc = &socketOperations;
-// 	client->fcb->streamfunc = &socketOperations;
+	server->fcb->streamfunc = &socketOperations;
+	client->fcb->streamfunc = &socketOperations;
 
-// 	server->s_type.peer_s->read_pipe = pipe1;
-// 	server->s_type.peer_s->write_pipe = pipe2;
+	server->s_type.peer_s->read_pipe = pipe1;
+	server->s_type.peer_s->write_pipe = pipe2;
 
-// 	client->s_type.peer_s->write_pipe = pipe1;
-// 	client->s_type.peer_s->read_pipe = pipe2;
+	client->s_type.peer_s->write_pipe = pipe1;
+	client->s_type.peer_s->read_pipe = pipe2;
 
-// 	conreq->admitted=1;
+	listener->refcount--;
 
-// 	listener->refcount--;
+	if (listener->refcount == 0) //REVISIT THIS
+		free(listener);
 
-// 	kernel_signal(&conreq->connected_cv);
+	conreq->admitted=1;
 
-// 	return serv_fid;
-return NOFILE;
+	kernel_signal(&conreq->connected_cv);
+
+	return serv_fid;
 }
 
 
@@ -235,5 +237,23 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
 
 int sys_ShutDown(Fid_t sock, shutdown_mode how)
 {
+
+	SCB* scb = get_scb(sock);
+
+	if( scb == NULL || scb->type != SOCKET_PEER)
+		return -1;
+
+	switch(how){
+		case SHUTDOWN_READ:
+			return pipe_reader_close(scb->s_type.peer_s->read_pipe);
+		case SHUTDOWN_WRITE:
+			return pipe_writer_close(scb->s_type.peer_s->write_pipe);
+		case SHUTDOWN_BOTH:
+			if(pipe_reader_close(scb->s_type.peer_s->read_pipe) == 0 && pipe_writer_close(scb->s_type.peer_s->write_pipe) == 0)
+				return 0;
+			return -1;
+		default:
+			return -1;
+	}
 	return -1;
 }
