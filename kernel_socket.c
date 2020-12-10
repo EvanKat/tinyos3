@@ -8,7 +8,7 @@ int socket_read(void* scb_t, char *buf, unsigned int size){
 	if(scb == NULL ||scb->type != SOCKET_PEER)
 		return -1;
 
-	return pipe_read(scb->s_type.peer_s->read_pipe, buf, size);
+	return pipe_read(scb->s_type.peer_s.read_pipe, buf, size);
 }
 
 int socket_write(void* scb_t, const char *buf, unsigned int size){
@@ -16,7 +16,7 @@ int socket_write(void* scb_t, const char *buf, unsigned int size){
 	if(scb == NULL || scb->type != SOCKET_PEER)
 		return -1;
 
-	return pipe_write(scb->s_type.peer_s->write_pipe, buf, size);
+	return pipe_write(scb->s_type.peer_s.write_pipe, buf, size);
 }
 	
 int socket_close(void* scb_t){
@@ -27,16 +27,16 @@ int socket_close(void* scb_t){
 
 	switch(scb->type){
 		case SOCKET_LISTENER:
-			while(rlist_len(&scb->s_type.listen_s->queue) != 0){
-				rlnode* trash = rlist_pop_front(&scb->s_type.listen_s->queue);
+			while(rlist_len(&scb->s_type.listen_s.queue) != 0){
+				rlnode* trash = rlist_pop_front(&scb->s_type.listen_s.queue);
 				kernel_signal(&trash->c_req->connected_cv);
 			}
 			PORT_MAP[scb->port] = NULL;
-			kernel_signal(&scb->s_type.listen_s->req_available);
+			kernel_signal(&scb->s_type.listen_s.req_available);
 			break;
 		case SOCKET_PEER:
-			pipe_writer_close( scb->s_type.peer_s->write_pipe );
-			pipe_reader_close( scb->s_type.peer_s->read_pipe );
+			pipe_writer_close( scb->s_type.peer_s.write_pipe );
+			pipe_reader_close( scb->s_type.peer_s.read_pipe );
 			break;
 		default:
 			break;
@@ -67,16 +67,6 @@ SCB* new_socket(port_t p){
 }
 
 
-
-// FCB* get_fcb(Fid_t fid)
-// {
-//   if(fid < 0 || fid >= MAX_FILEID) return NULL;
-
-//   return CURPROC->FIDT[fid];
-// }
-/** Returns the SCB of the CURPROC
-	With the use of get_fcb() 
-*/ 
 SCB* get_scb(Fid_t sock){
 	FCB* socket_fcb = get_fcb(sock);
 
@@ -88,12 +78,10 @@ SCB* get_scb(Fid_t sock){
 
 /**
 	@brief Return a new socket bound on a port.
-
 	This function returns a file descriptor for a new
 	socket object.	If the @c port argument is NOPORT, then the 
 	socket will not be bound to a port. Else, the socket
 	will be bound to the specified port. 
-
 	@param port The port the new socket will be bound to
 	@returns A file id for the new socket, or NOFILE on error. Possible
 		reasons for error:
@@ -126,16 +114,13 @@ Fid_t sys_Socket(port_t port)
 
 /**
 	@brief Initialize a socket as a listening socket.
-
 	A listening socket is one which can be passed as an argument to
 	@c Accept. Once a socket becomes a listening socket, it is not
 	possible to call any other functions on it except @c Accept, @Close
 	and @c Dup2().
-
 	The socket must be bound to a port, as a result of calling @c Socket.
 	On each port there must be a unique listening socket (although any number
 	of non-listening sockets are allowed).
-
 	@param sock the socket to initialize as a listening socket
 	@returns 0 on success, -1 on error. Possible reasons for error:
 		- the file id is not legal
@@ -158,9 +143,9 @@ int sys_Listen(Fid_t sock)
 	// Link PORT_MAP with SCB 
 	PORT_MAP[socket->port] = socket;
 	// Initialize the Cond_Var od socket
-	socket->s_type.listen_s->req_available = COND_INIT;
+	socket->s_type.listen_s.req_available = COND_INIT;
 	// Initialize the header of the listeners queue
-	rlnode_init(&socket->s_type.listen_s->queue, NULL);
+	rlnode_init(&socket->s_type.listen_s.queue, NULL);
 
 	return 0;
 }
@@ -169,16 +154,13 @@ int sys_Listen(Fid_t sock)
 
 /**
 	@brief Wait for a connection.
-
 	With a listening socket as its sole argument, this call will block waiting
 	for a single @c Connect() request on the socket's port. 
 	one which can be passed as an argument to @c Accept. 
-
 	It is possible (and desirable) to re-use the listening socket in multiple successive
 	calls to Accept. This is a typical pattern: a thread blocks at Accept in a tight
 	loop, where each iteration creates new a connection, 
 	and then some thread takes over the connection for communication with the client.
-
 	@param sock the socket to initialize as a listening socket
 	@returns a new socket file id on success, @c NOFILE on error. Possible reasons 
 	    for error:
@@ -186,7 +168,6 @@ int sys_Listen(Fid_t sock)
 		- the file id is not initialized by @c Listen()
 		- the available file ids for the process are exhausted
 		- while waiting, the listening socket @c lsock was closed
-
 	@see Connect
 	@see Listen
  */
@@ -202,8 +183,8 @@ Fid_t sys_Accept(Fid_t lsock)
 	listener->refcount++;
 
 	// While queue of request is empty and listener port is NOPORT then wait 
-	while (rlist_len(&listener->s_type.listen_s->queue) == 0 && listener->port != NOPORT){ 
-		kernel_wait(&listener->s_type.listen_s->req_available, SCHED_PIPE);
+	while (rlist_len(&listener->s_type.listen_s.queue) == 0 && listener->port != NOPORT){ 
+		kernel_wait(&listener->s_type.listen_s.req_available, SCHED_PIPE);
 	}
 
 	// If listener port is NOPORT the fail
@@ -211,7 +192,7 @@ Fid_t sys_Accept(Fid_t lsock)
 		return NOFILE;
 
 	// Take the 1st waiting connection request
-	rlnode* request = rlist_pop_front(&listener->s_type.listen_s->queue);
+	rlnode* request = rlist_pop_front(&listener->s_type.listen_s.queue);
 	// The connection(&socket) that waited to connect
 	c_req* c_req = request->c_req;
 
@@ -234,8 +215,8 @@ Fid_t sys_Accept(Fid_t lsock)
 
 	// TODO: Check the union tyoe for client. Can we rechange it?
     // connect peers 
-	server_scb->s_type.peer_s->peer = client_scb;
-	client_scb->s_type.peer_s->peer = server_scb;
+	server_scb->s_type.peer_s.peer = client_scb;
+	client_scb->s_type.peer_s.peer = server_scb;
 
 	// Initiallise 
 	Pipe_CB* p1 = pipe_init();
@@ -254,11 +235,11 @@ Fid_t sys_Accept(Fid_t lsock)
 	client_scb->fcb->streamfunc = &socketOperations;
 
 	// Connect server socket with pipes
-	server_scb->s_type.peer_s->write_pipe = p1;
-	server_scb->s_type.peer_s->read_pipe = p2;
+	server_scb->s_type.peer_s.write_pipe = p1;
+	server_scb->s_type.peer_s.read_pipe = p2;
 	// Connect client socket with pipes
-	client_scb->s_type.peer_s->read_pipe = p1;
-	client_scb->s_type.peer_s->write_pipe = p2;
+	client_scb->s_type.peer_s.read_pipe = p1;
+	client_scb->s_type.peer_s.write_pipe = p2;
 
 	// Requester admitted
 	c_req->admitted=1;
@@ -275,19 +256,15 @@ Fid_t sys_Accept(Fid_t lsock)
 
 /**
 	@brief Create a connection to a listener at a specific port.
-
 	Given a socket @c sock and @c port, this call will attempt to establish
 	a connection to a listening socket on that port. If sucessful, the
 	@c sock stream is connected to the new stream created by the listener.
-
 	The two connected sockets communicate by virtue of two pipes of opposite directions, 
 	but with one file descriptor servicing both pipes at each end.
-
 	The connect call will block for approximately the specified amount of time.
 	The resolution of this timeout is implementation specific, but should be
 	in the order of 100's of msec. Therefore, a timeout of at least 500 msec is
 	reasonable. If a negative timeout is given, it means, "infinite timeout".
-
 	@params sock the socket to connect to the other end
 	@params port the port on which to seek a listening socket
 	@params timeout the approximate amount of time to wait for a
@@ -321,9 +298,9 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
 	//initialise the rlnode of the request to point to itself(intrusive lists u know)
 	rlnode_init(&request->queue_node, &request);
 	// Add the request to the listener's list
-	rlist_push_back(&listener_scb->s_type.listen_s->queue, &request->queue_node);
+	rlist_push_back(&listener_scb->s_type.listen_s.queue, &request->queue_node);
 	// Signal the listener that there is a request to handle!
-	kernel_signal(&listener_scb->s_type.listen_s->req_available); 
+	kernel_signal(&listener_scb->s_type.listen_s.req_available); 
 
 	// How it works
 	// The result of the kernel_timedwait() will be stored here
@@ -353,23 +330,19 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
 
 /**
    @brief Shut down one direction of socket communication.
-
    With a socket which is connected to another socket, this call will 
    shut down one or the other direction of communication. The shut down
    of a direction has implications similar to those of a pipe's end shutdown.
    More specifically, assume that this end is socket A, connected to socket
    B at the other end. Then,
-
    - if `ShutDown(A, SHUTDOWN_READ)` is called, any attempt to call `Write(B,...)`
      will fail with a code of -1.
    - if ShutDown(A, SHUTDOWN_WRITE)` is called, any attempt to call `Read(B,...)`
      will first exhaust the buffered data and then will return 0.
    - if ShutDown(A, SHUTDOWN_BOTH)` is called, it is equivalent to shutting down
      both read and write.
-
    After shutdown of socket A, the corresponding operation `Read(A,...)` or `Write(A,...)`
    will return -1.
-
    Shutting down multiple times is not an error.
    
    @param sock the file ID of the socket to shut down.
@@ -394,11 +367,11 @@ int sys_ShutDown(Fid_t sock, shutdown_mode how)
 
 	switch(how){
 		case SHUTDOWN_READ:
-			return pipe_reader_close(socket_cb->s_type.peer_s->read_pipe);
+			return pipe_reader_close(socket_cb->s_type.peer_s.read_pipe);
 		case SHUTDOWN_WRITE:
-			return pipe_writer_close(socket_cb->s_type.peer_s->write_pipe);
+			return pipe_writer_close(socket_cb->s_type.peer_s.write_pipe);
 		case SHUTDOWN_BOTH:
-			if(pipe_reader_close(socket_cb->s_type.peer_s->read_pipe) == 0 && pipe_writer_close(socket_cb->s_type.peer_s->write_pipe) == 0)
+			if(pipe_reader_close(socket_cb->s_type.peer_s.read_pipe) == 0 && pipe_writer_close(socket_cb->s_type.peer_s.write_pipe) == 0)
 				return 0;
 			return -1;
 		default:
@@ -408,23 +381,23 @@ int sys_ShutDown(Fid_t sock, shutdown_mode how)
 }
 
 
-// TODO: use this instead of refcount-- in the code
+// // TODO: use this instead of refcount-- in the code
 
-// A function to decrement the refcount SCB counter and 
-// delete/free the space if no one points to the arg SCB
-void decref_SCB(SCB * socket_cb){
-	socket_cb->refcount--;
-	//If therefcount == 0, do one of three cases:
-	if(socket_cb->refcount == 0){
-		if(socket_cb->type == SOCKET_PEER){ // if its a non-reffered-anywhered peer, it has no purpose
-			free(socket_cb->s_type.peer_s);
-			free(socket_cb);
-			}
-		if(socket_cb->type == SOCKET_UNBOUND)
-			free(socket_cb);
-		if(socket_cb->type == SOCKET_LISTENER){
-			free(socket_cb->s_type.listen_s);
-			free(socket_cb);
-		}
-	}
-}
+// // A function to decrement the refcount SCB counter and 
+// // delete/free the space if no one points to the arg SCB
+// void decref_SCB(SCB * socket_cb){
+// 	socket_cb->refcount--;
+// 	//If therefcount == 0, do one of three cases:
+// 	if(socket_cb->refcount == 0){
+// 		if(socket_cb->type == SOCKET_PEER){ // if its a non-reffered-anywhered peer, it has no purpose
+// 			free(socket_cb->s_type.peer_s);
+// 			free(socket_cb);
+// 			}
+// 		if(socket_cb->type == SOCKET_UNBOUND)
+// 			free(socket_cb);
+// 		if(socket_cb->type == SOCKET_LISTENER){
+// 			free(socket_cb->s_type.listen_s);
+// 			free(socket_cb);
+// 		}
+// 	}
+// }
