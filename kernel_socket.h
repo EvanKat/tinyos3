@@ -12,10 +12,10 @@
 typedef struct Socket_Control_Block SCB;
 
 // PORT Map table
-SCB* PORT_MAP[MAX_PORT+1];
+SCB* PORT_MAP[MAX_PORT+1]={NULL};
 
-struct connection_request{
-  int admited; // a flag that shows if the connection request is already accepted or not
+typedef struct connection_request{
+  int admitted; // a flag that shows if the connection request is already accepted or not
   SCB* peer;  //points to the socket that made the rekuest
   
   CondVar connected_cv;  // shows that its connected?maybe?
@@ -51,7 +51,7 @@ typedef enum socket_type{
 // Socket Control Block
 typedef struct Socket_Control_Block{
 	// Pointer to FCB reader an writete starts here
-	FCB *fcb;
+	FCB* fcb;
 	// Reference counter (possible for listener socket)
 	uint refcount;
 	// Socket type
