@@ -275,7 +275,7 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
 	//Get the listener SCB from the specified(arg) port 
 	SCB* listener_scb = PORT_MAP[port];	
 	//initialise the rlnode of the request to point to itself(intrusive lists u know)
-	rlnode_init(&listener_scb->queue_node, &request);
+	rlnode_init(&request->queue_node, &request);
 	// Add the request to the listener's list
 	rlist_push_back(&listener_scb->s_type.listen_s->queue, &request->queue_node);
 	// Signal the listener that there is a request to handle!
