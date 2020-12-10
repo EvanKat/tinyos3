@@ -61,9 +61,9 @@ typedef struct Socket_Control_Block{
 
 	// Only one type of it 
 	union scb_action{
-		listen_st* listen_s;
-		unbound_st* unbound_s;
-		peer_st* peer_s;
+		listen_st listen_s;
+		unbound_st unbound_s;
+		peer_st peer_s;
 	}s_type;
 
 }SCB;
