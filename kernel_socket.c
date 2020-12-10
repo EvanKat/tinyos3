@@ -273,7 +273,7 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
 	request->connected_cv = COND_INIT;
 
 	//Get the listener SCB from the specified(arg) port 
-	SCB* listener_scb = PORT_MAP[port]
+	SCB* listener_scb = PORT_MAP[port];	
 	//initialise the rlnode of the request to point to itself(intrusive lists u know)
 	rlnode_init(&listener_scb->queue_node, &request);
 	// Add the request to the listener's list
@@ -293,8 +293,8 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
 		if (timeout_result==0){
 			// the above condition satisfied means (not sure) that the kernel wait was timed out
 			// so we remove the request from the listener scb list and free its space
-			rlist_remove(&request->queue_node)
-			free(request)
+			rlist_remove(&request->queue_node);
+			free(request);
 			return -1;
 		}
 	}
