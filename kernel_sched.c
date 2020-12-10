@@ -311,13 +311,19 @@ static void sched_queue_add(TCB* tcb)
 	// Priority assignment based on the last SCHED_CAUSE
 	// int current_queue= (tcb->its / QUANTUM)-1;  //here we store the priority of our thread
 	int current_queue = tcb->priority_level;
-	if((tcb->curr_cause==SCHED_QUANTUM) && (current_queue != (QUEUES-1))) // demote if not already in lowermost queue AND yielded because of QUANTUM
+	if((tcb->curr_cause==SCHED_QUANTUM) && (current_queue != (QUEUES-1))){ // demote if not already in lowermost queue AND yielded because of QUANTUM
 		rlist_push_back(&SCHED[current_queue+1], &tcb->sched_node);  // push (insert) to lower priority queue
-	else if((tcb->curr_cause==SCHED_IO) && (current_queue != 0))  // if the thread yielded because of I/O and we are NOT in the highest priority queue
+		tcb->priority_level++;
+	}
+	else if((tcb->curr_cause==SCHED_IO) && (current_queue != 0)){  // if the thread yielded because of I/O and we are NOT in the highest priority queue
 		rlist_push_back(&SCHED[current_queue-1], &tcb->sched_node);
+		tcb->priority_level--;
+	}
 	// else if sched cause == MUTEX, send to last queue
-	else if((tcb->curr_cause==SCHED_MUTEX) && (current_queue != (QUEUES-1)))  // if yielded because of MUTEX lock, demote/push to Last Queue
-	       rlist_push_back(&SCHED[QUEUES-1],&tcb->sched_node);
+	else if((tcb->curr_cause==SCHED_MUTEX) && (current_queue != (QUEUES-1))){  // if yielded because of MUTEX lock, demote/push to Last Queue
+	    rlist_push_back(&SCHED[QUEUES-1],&tcb->sched_node);
+		tcb->priority_level = QUEUES-1;
+	}
 	else
 		rlist_push_back(&SCHED[current_queue], &tcb->sched_node);  // leave priority as is
 
