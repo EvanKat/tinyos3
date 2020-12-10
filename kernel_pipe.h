@@ -25,7 +25,7 @@ typedef struct pipe_control_block {
     
 } Pipe_CB;
 
-
+Pipe_CB* pipe_init();
 int sys_Pipe(pipe_t* pipe);
 
 int pipe_write(void* pipecb_t, const char *buf, unsigned int n);
