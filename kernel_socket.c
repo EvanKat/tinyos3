@@ -35,8 +35,10 @@ int socket_close(void* scb_t){
 			kernel_signal(&scb->s_type.listen_s.req_available);
 			break;
 		case SOCKET_PEER:
-			pipe_writer_close( scb->s_type.peer_s.write_pipe );
-			pipe_reader_close( scb->s_type.peer_s.read_pipe );
+			if(scb->s_type.peer_s.read_pipe != NULL )
+				pipe_reader_close(scb->s_type.peer_s.read_pipe);
+			if(scb->s_type.peer_s.write_pipe != NULL)
+				pipe_writer_close(scb->s_type.peer_s.write_pipe);
 			break;
 		default:
 			break;
@@ -368,16 +370,25 @@ int sys_ShutDown(Fid_t sock, shutdown_mode how)
 
 	if( socket_cb == NULL || socket_cb->type != SOCKET_PEER)
 		return -1;
-
+	int ret;
 	switch(how){
 		case SHUTDOWN_READ:
-			return pipe_reader_close(socket_cb->s_type.peer_s.read_pipe);
+			ret = pipe_reader_close(socket_cb->s_type.peer_s.read_pipe);
+			if(!ret)
+				socket_cb->s_type.peer_s.read_pipe = NULL;
+			return ret;
 		case SHUTDOWN_WRITE:
-			return pipe_writer_close(socket_cb->s_type.peer_s.write_pipe);
+			ret = pipe_writer_close(socket_cb->s_type.peer_s.write_pipe);
+			if(!ret)
+				socket_cb->s_type.peer_s.write_pipe = NULL;
+			return ret;
 		case SHUTDOWN_BOTH:
-			if(pipe_reader_close(socket_cb->s_type.peer_s.read_pipe) == 0 && pipe_writer_close(socket_cb->s_type.peer_s.write_pipe) == 0)
-				return 0;
-			return -1;
+			ret = ( pipe_reader_close(socket_cb->s_type.peer_s.read_pipe) && pipe_writer_close(socket_cb->s_type.peer_s.write_pipe));
+			if(!ret){
+				socket_cb->s_type.peer_s.write_pipe = NULL;
+				socket_cb->s_type.peer_s.read_pipe = NULL;
+			}
+			return ret;
 		default:
 			return -1;
 	}
