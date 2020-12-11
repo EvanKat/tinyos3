@@ -27,24 +27,24 @@ int socket_close(void* scb_t){
 
 	switch(scb->type){
 		case SOCKET_LISTENER:
-			while(rlist_len(&scb->s_type.listen_s.queue) != 0){
-				rlnode* trash = rlist_pop_front(&scb->s_type.listen_s.queue);
+			while(rlist_len(&scb->listen_s.queue) != 0){
+				rlnode* trash = rlist_pop_front(&scb->listen_s.queue);
 				kernel_signal(&trash->c_req->connected_cv);
 			}
 			PORT_MAP[scb->port] = NULL;
-			kernel_signal(&scb->s_type.listen_s.req_available);
+			scb->port = NOPORT;
+			kernel_signal(&scb->listen_s.req_available);
 			break;
 		case SOCKET_PEER:
-			if(scb->s_type.peer_s.read_pipe != NULL )
-				pipe_reader_close(scb->s_type.peer_s.read_pipe);
-			if(scb->s_type.peer_s.write_pipe != NULL)
-				pipe_writer_close(scb->s_type.peer_s.write_pipe);
+			pipe_reader_close(scb->peer_s.read_pipe);
+			pipe_writer_close(scb->peer_s.write_pipe);
 			break;
 		default:
 			break;
 	}
+
 	scb->refcount--;
-	if (scb->refcount == 0)
+	if (scb->refcount < 0)
 		free(scb);
 
 	return 0;
@@ -250,8 +250,8 @@ Fid_t sys_Accept(Fid_t lsock)
 	listener->refcount--;
 
 	// TODO: where to set
-	// if (listener->refcount == 0) //REVISIT THIS
-	// 	free(listener);
+	 if (listener->refcount < 0) //REVISIT THIS
+	 	free(listener);
 
 
 	//wake up whoever sleeps in the listener condvar(connect sleeps there)
@@ -328,6 +328,8 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
 
 	//decrease socket refcount
 	socket->refcount--;
+	if (socket->refcount < 0)
+		free(socket);
 	// TODO: Need to check if refcount == 0
 	return 0;
 }
@@ -373,20 +375,17 @@ int sys_ShutDown(Fid_t sock, shutdown_mode how)
 	int ret;
 	switch(how){
 		case SHUTDOWN_READ:
-			ret = pipe_reader_close(socket_cb->s_type.peer_s.read_pipe);
-			if(!ret)
-				socket_cb->s_type.peer_s.read_pipe = NULL;
+			if(!(ret = pipe_reader_close(socket_cb->peer_s.read_pipe)))
+				socket_cb->peer_s.read_pipe = NULL;
 			return ret;
 		case SHUTDOWN_WRITE:
-			ret = pipe_writer_close(socket_cb->s_type.peer_s.write_pipe);
-			if(!ret)
-				socket_cb->s_type.peer_s.write_pipe = NULL;
+			if(!(ret = pipe_writer_close(socket_cb->peer_s.write_pipe)))
+				socket_cb->peer_s.write_pipe = NULL;
 			return ret;
 		case SHUTDOWN_BOTH:
-			ret = ( pipe_reader_close(socket_cb->s_type.peer_s.read_pipe) && pipe_writer_close(socket_cb->s_type.peer_s.write_pipe));
-			if(!ret){
-				socket_cb->s_type.peer_s.write_pipe = NULL;
-				socket_cb->s_type.peer_s.read_pipe = NULL;
+			if(!(ret = ( pipe_reader_close(socket_cb->peer_s.read_pipe) && pipe_writer_close(socket_cb->peer_s.write_pipe)))){
+				socket_cb->peer_s.write_pipe = NULL;
+				socket_cb->peer_s.read_pipe = NULL;
 			}
 			return ret;
 		default:
