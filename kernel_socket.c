@@ -251,7 +251,9 @@ Fid_t sys_Accept(Fid_t lsock)
 	// if (listener->refcount == 0) //REVISIT THIS
 	// 	free(listener);
 
-	kernel_signal(&c_req->connected_cv);
+
+	//wake up whoever sleeps in the listener condvar(connect sleeps there)
+	kernel_signal(&listener->s_type.listen_s.req_available);
 	return serv_fid;
 }
 
@@ -309,7 +311,10 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
 	//IMPORTANT: the connect() function waits in the condvar of the request(struct)
 	//When the accept() accepts the request, it has to signal that condition variable
 	//to begin the data exchange.
-	timeout_result = kernel_timedwait(&request->connected_cv, SCHED_PIPE, timeout);
+	
+	//sleep on the listener's condvar for a specified amount of time(when he accept()'s us, he will wake us up)
+	timeout_result = kernel_timedwait(&listener_scb->s_type.listen_s.req_available, SCHED_PIPE, timeout);
+
 	if (timeout_result==0){
 		// the above condition satisfied means (not sure) that the kernel wait was timed out
 		// so we remove the request from the listener scb list and free its space
