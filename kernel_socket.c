@@ -8,7 +8,7 @@ int socket_read(void* scb_t, char *buf, unsigned int size){
 	if(scb == NULL ||scb->type != SOCKET_PEER)
 		return -1;
 
-	return pipe_read(scb->s_type.peer_s.read_pipe, buf, size);
+	return pipe_read(scb->peer_s.read_pipe, buf, size);
 }
 
 int socket_write(void* scb_t, const char *buf, unsigned int size){
@@ -16,7 +16,7 @@ int socket_write(void* scb_t, const char *buf, unsigned int size){
 	if(scb == NULL || scb->type != SOCKET_PEER)
 		return -1;
 
-	return pipe_write(scb->s_type.peer_s.write_pipe, buf, size);
+	return pipe_write(scb->peer_s.write_pipe, buf, size);
 }
 	
 int socket_close(void* scb_t){
@@ -146,9 +146,9 @@ int sys_Listen(Fid_t sock)
 	PORT_MAP[socket->port] = socket;
 
 	// Initialize the Cond_Var of socket
-	socket->s_type.listen_s.req_available = COND_INIT;
+	socket->listen_s.req_available = COND_INIT;
 	// Initialize the header of the listeners queue
-	rlnode_init(&socket->s_type.listen_s.queue, NULL);
+	rlnode_init(&socket->listen_s.queue, NULL);
 
 	return 0;
 }
@@ -186,8 +186,8 @@ Fid_t sys_Accept(Fid_t lsock)
 	listener->refcount++;
 
 	// While queue of request is empty and listener port is NOPORT then wait 
-	while (rlist_len(&listener->s_type.listen_s.queue) == 0 && listener->port != NOPORT){ 
-		kernel_wait(&listener->s_type.listen_s.req_available, SCHED_PIPE);
+	while (rlist_len(&listener->listen_s.queue) == 0 && listener->port != NOPORT){ 
+		kernel_wait(&listener->listen_s.req_available, SCHED_PIPE);
 	}
 
 	// If listener port is NOPORT the fail
@@ -195,7 +195,7 @@ Fid_t sys_Accept(Fid_t lsock)
 		return NOFILE;
 
 	// Take the 1st waiting connection request
-	rlnode* request = rlist_pop_front(&listener->s_type.listen_s.queue);
+	rlnode* request = rlist_pop_front(&listener->listen_s.queue);
 	// The connection(&socket) that waited to connect
 	c_req* c_req = request->c_req;
 
@@ -218,8 +218,8 @@ Fid_t sys_Accept(Fid_t lsock)
 
 	// TODO: Check the union tyoe for client. Can we rechange it?
     // connect peers 
-	server_scb->s_type.peer_s.peer = client_scb;
-	client_scb->s_type.peer_s.peer = server_scb;
+	server_scb->peer_s.peer = client_scb;
+	client_scb->peer_s.peer = server_scb;
 
 	// Initiallise 
 	Pipe_CB* p1 = pipe_init();
@@ -238,11 +238,11 @@ Fid_t sys_Accept(Fid_t lsock)
 	client_scb->fcb->streamfunc = &socketOperations;
 
 	// Connect server socket with pipes
-	server_scb->s_type.peer_s.write_pipe = p1;
-	server_scb->s_type.peer_s.read_pipe = p2;
+	server_scb->peer_s.write_pipe = p1;
+	server_scb->peer_s.read_pipe = p2;
 	// Connect client socket with pipes
-	client_scb->s_type.peer_s.read_pipe = p1;
-	client_scb->s_type.peer_s.write_pipe = p2;
+	client_scb->peer_s.read_pipe = p1;
+	client_scb->peer_s.write_pipe = p2;
 
 	// Requester admitted
 	c_req->admitted=1;
@@ -255,7 +255,7 @@ Fid_t sys_Accept(Fid_t lsock)
 
 
 	//wake up whoever sleeps in the listener condvar(connect sleeps there)
-	kernel_signal(&listener->s_type.listen_s.req_available);
+	kernel_signal(&listener->listen_s.req_available);
 	return serv_fid;
 }
 
@@ -303,9 +303,9 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
 
 	SCB* listener_scb = PORT_MAP[port];
 	// Add the request to the listener's list
-	rlist_push_back(&listener_scb->s_type.listen_s.queue, &request->queue_node);
+	rlist_push_back(&listener_scb->listen_s.queue, &request->queue_node);
 	// Signal the listener that there is a request to handle!
-	kernel_signal(&listener_scb->s_type.listen_s.req_available); 
+	kernel_signal(&listener_scb->listen_s.req_available); 
 
 	// How it works
 	// The result of the kernel_timedwait() will be stored here
@@ -315,7 +315,7 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
 	//to begin the data exchange.
 	
 	//sleep on the listener's condvar for a specified amount of time(when he accept()'s us, he will wake us up)
-	timeout_result = kernel_timedwait(&listener_scb->s_type.listen_s.req_available, SCHED_PIPE, timeout);
+	timeout_result = kernel_timedwait(&listener_scb->listen_s.req_available, SCHED_PIPE, timeout);
 
 	if (timeout_result==0){
 		// the above condition satisfied means (not sure) that the kernel wait was timed out
@@ -410,7 +410,7 @@ int sys_ShutDown(Fid_t sock, shutdown_mode how)
 // 		if(socket_cb->type == SOCKET_UNBOUND)
 // 			free(socket_cb);
 // 		if(socket_cb->type == SOCKET_LISTENER){
-// 			free(socket_cb->s_type.listen_s);
+// 			free(socket_cb->sa_type.listen_s);
 // 			free(socket_cb);
 // 		}
 // 	}
