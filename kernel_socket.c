@@ -135,14 +135,15 @@ int sys_Listen(Fid_t sock)
 	SCB* socket = get_scb(sock);
 
 	// Checks
-	if(socket == NULL || socket->type != SOCKET_UNBOUND || socket->port == NOPORT || PORT_MAP[socket->port] != NULL)
+	if(socket == NULL || socket->type != SOCKET_UNBOUND || socket->port < 1 || socket->port > MAX_PORT || PORT_MAP[socket->port] != NULL)
 		return -1;
 	
 	// Mark the socket as Listener
 	socket->type = SOCKET_LISTENER;
 	// Link PORT_MAP with SCB 
 	PORT_MAP[socket->port] = socket;
-	// Initialize the Cond_Var od socket
+
+	// Initialize the Cond_Var of socket
 	socket->s_type.listen_s.req_available = COND_INIT;
 	// Initialize the header of the listeners queue
 	rlnode_init(&socket->s_type.listen_s.queue, NULL);
@@ -280,7 +281,7 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
 	// Get the pointer to our SCB struct from the Fid_t argument
 	SCB* socket = get_scb(sock);  
 
-	if(socket == NULL || socket->type != SOCKET_LISTENER || port > MAX_PORT || port < 1 || PORT_MAP[port] != NULL){
+	if(socket == NULL || socket->type != SOCKET_UNBOUND || port > MAX_PORT || port < 1 || PORT_MAP[port] == NULL  || PORT_MAP[port]->type != SOCKET_LISTENER){
 		return -1;
 	}
 	// Increase refcount of SCB
@@ -292,11 +293,11 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
 	// Point to the parent peer 
 	request->peer = socket; 
 	request->connected_cv = COND_INIT;
-
-	//Get the listener SCB from the specified(arg) port 
-	SCB* listener_scb = PORT_MAP[port];	
 	//initialise the rlnode of the request to point to itself(intrusive lists u know)
 	rlnode_init(&request->queue_node, &request);
+
+
+	SCB* listener_scb = PORT_MAP[port];
 	// Add the request to the listener's list
 	rlist_push_back(&listener_scb->s_type.listen_s.queue, &request->queue_node);
 	// Signal the listener that there is a request to handle!
@@ -305,20 +306,18 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
 	// How it works
 	// The result of the kernel_timedwait() will be stored here
 	timeout_t timeout_result;  
-
-	while(request->admitted == 0){
-		//IMPORTANT: the connect() function waits in the condvar of the request(struct)
-		//When the accept() accepts the request, it has to signal that condition variable
-		//to begin the data exchange.
-		timeout_result = kernel_timedwait(&request->connected_cv, SCHED_PIPE, timeout);
-		if (timeout_result==0){
-			// the above condition satisfied means (not sure) that the kernel wait was timed out
-			// so we remove the request from the listener scb list and free its space
-			rlist_remove(&request->queue_node);
-			free(request);
-			return -1;
-		}
+	//IMPORTANT: the connect() function waits in the condvar of the request(struct)
+	//When the accept() accepts the request, it has to signal that condition variable
+	//to begin the data exchange.
+	timeout_result = kernel_timedwait(&request->connected_cv, SCHED_PIPE, timeout);
+	if (timeout_result==0){
+		// the above condition satisfied means (not sure) that the kernel wait was timed out
+		// so we remove the request from the listener scb list and free its space
+		rlist_remove(&request->queue_node);
+		free(request);
+		return -1;
 	}
+
 
 	//decrease socket refcount
 	socket->refcount--;
