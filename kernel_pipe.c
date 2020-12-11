@@ -74,7 +74,7 @@ int sys_Pipe(pipe_t* pipe)
 int pipe_write(void* pipecb_t, const char *buf, unsigned int size){
     Pipe_CB* pipe_CB = (Pipe_CB*)pipecb_t;
     
-    if(pipe_CB==NULL || buf==NULL || size < 1 || pipe_CB->reader == NULL)
+    if(pipe_CB==NULL || buf==NULL || size < 1 || pipe_CB->writer == NULL || pipe_CB->reader == NULL)
         return -1;
 
     int buffer_counter=0;
@@ -119,7 +119,7 @@ int pipe_write(void* pipecb_t, const char *buf, unsigned int size){
 int pipe_read(void* pipecb_t, char *buf, unsigned int size){
     Pipe_CB* pipe_CB = (Pipe_CB*)pipecb_t;
     
-    if(pipe_CB==NULL || buf==NULL || size<1 )
+    if(pipe_CB==NULL || buf==NULL || size<1 || pipe_CB->reader == NULL )
         return -1;
 
     int buffer_counter=0;
@@ -163,7 +163,7 @@ int pipe_writer_close(void* _pipecb){
     
     // Cases of failure 
     // Possible no need of FCB writer check
-    if(pipe_CB == NULL && pipe_CB->writer == NULL)
+    if(pipe_CB == NULL || pipe_CB->writer == NULL)
         return -1;
     
     // Set writer FCB to NULL
@@ -183,7 +183,7 @@ int pipe_reader_close(void* _pipecb){
 
     // Cases of failure 
     // Possible no need of FCB writer check
-    if(pipe_CB == NULL && pipe_CB->reader == NULL)
+    if(pipe_CB == NULL || pipe_CB->reader == NULL)
         return -1;
 
     // set reader FCB to null
