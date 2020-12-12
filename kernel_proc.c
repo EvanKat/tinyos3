@@ -24,8 +24,8 @@ unsigned int process_count;
 static file_ops procinfo_ops = {
   .Open = NULL,
   .Read = procinfo_read,
-  .Write = -1,
-  .Close = sprocinfo_close
+  .Write = NULL,
+  .Close = procinfo_close
 };
 
 PCB* get_pcb(Pid_t pid)
@@ -341,28 +341,29 @@ Fid_t sys_OpenInfo()
   Fid_t fid;
   FCB*  fcb;
 
-  if(!FCB_reserve(1,&fid,&fcb))
+  if(!FCB_reserve(1,&fid,&fcb)){
     return NOFILE;  // not -1 because nofile is handled without throwing an exception in SysInfo()
+  }
 
   procinfo* proc_info = init_procinfo();
 
-  FCB->streamobj = proc_info;  // Link FCB--->procinfo struct
+  fcb->streamobj = proc_info;  // Link FCB--->procinfo struct
 
-  FCB->streamfunc = &procinfo_ops;  // Link FCB--->procinfo_ops
+  fcb->streamfunc = &procinfo_ops;  // Link FCB--->procinfo_ops
 
   return fid;
 }
 
 
-procinfo_cb* init_procinfo(){
+procinfo* init_procinfo(){
 
   procinfo* info= (procinfo*)xmalloc(sizeof(procinfo));
   /*set the curor to 0*/
-  PT_cursor = 0;
+  info->PT_cursor = 0;
   /*Get the pid of the process*/
-  info->pid = get_pid(&PT[procinfo->pcb_cursor]);  // could be empty?
+  info->pid = get_pid(&PT[info->PT_cursor]);  // could be empty?
 
-  info->ppid = NULL;
+  info->ppid = 0;
 
   info->alive = 0;
 
@@ -370,7 +371,7 @@ procinfo_cb* init_procinfo(){
 
   info->argl = 0;
 
-  info->args = '';
+  //info->args = '';  // causes weird behaviour
 
   return info;
 
@@ -388,7 +389,7 @@ int procinfo_close(void* info){
   if (proc_info == NULL)  // if already NULL we may not be able to free it
     return -1;  //signal failure
 
-  free(&proc_info);
+  free(proc_info);
 
   return 0;
 }

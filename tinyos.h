@@ -723,6 +723,8 @@ typedef struct procinfo
   int alive;      /**< @brief Non-zero if process is alive, zero if process is zombie. */
 	
   unsigned long thread_count; /**< Current no of threads. */
+
+  int PT_cursor;  // the integer index of PT array
 	
   Task main_task;  /**< @brief The main task of the process. */
 	
@@ -737,6 +739,7 @@ typedef struct procinfo
     If the task's argument is longer (as designated by the @c argl field), the
     bytes contained in this field are just the prefix.  */
 } procinfo;
+
 
 
 /**

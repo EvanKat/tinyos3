@@ -107,3 +107,5 @@ Pid_t get_pid(PCB* pcb);
 int procinfo_read();
 
 int procinfo_close();
+
+procinfo* init_procinfo();
