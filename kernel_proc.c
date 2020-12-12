@@ -21,6 +21,13 @@
 PCB PT[MAX_PROC];
 unsigned int process_count;
 
+static file_ops procinfo_ops = {
+  .Open = NULL,
+  .Read = procinfo_read,
+  .Write = -1,
+  .Close = sprocinfo_close
+};
+
 PCB* get_pcb(Pid_t pid)
 {
   return PT[pid].pstate==FREE ? NULL : &PT[pid];
@@ -331,5 +338,59 @@ void sys_Exit(int exitval)
 
 Fid_t sys_OpenInfo()
 {
-	return NOFILE;
+  Fid_t fid;
+  FCB*  fcb;
+
+  if(!FCB_reserve(1,&fid,&fcb))
+    return NOFILE;  // not -1 because nofile is handled without throwing an exception in SysInfo()
+
+  procinfo* proc_info = init_procinfo();
+
+  FCB->streamobj = proc_info;  // Link FCB--->procinfo struct
+
+  FCB->streamfunc = &procinfo_ops;  // Link FCB--->procinfo_ops
+
+  return fid;
 }
+
+
+procinfo_cb* init_procinfo(){
+
+  procinfo* info= (procinfo*)xmalloc(sizeof(procinfo));
+  /*set the curor to 0*/
+  PT_cursor = 0;
+  /*Get the pid of the process*/
+  info->pid = get_pid(&PT[procinfo->pcb_cursor]);  // could be empty?
+
+  info->ppid = NULL;
+
+  info->alive = 0;
+
+  info->thread_count = 0;
+
+  info->argl = 0;
+
+  info->args = '';
+
+  return info;
+
+}
+
+int procinfo_read(void* procinfo, char *buf, unsigned int size){
+
+
+  return -1;
+}
+
+int procinfo_close(void* info){         
+  procinfo* proc_info = (procinfo*) info;  
+
+  if (proc_info == NULL)  // if already NULL we may not be able to free it
+    return -1;  //signal failure
+
+  free(&proc_info);
+
+  return 0;
+}
+
+

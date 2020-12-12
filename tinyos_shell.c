@@ -168,15 +168,27 @@ int SystemInfo(size_t argc, const char** argv)
 {
 	printf("Number of cores         = %d\n", cpu_cores());
 	printf("Number of serial devices= %d\n", bios_serial_ports());
-	Fid_t finfo = OpenInfo();
-	if(finfo!=NOFILE) {
-		/* Print per-process info */
+	Fid_t finfo = OpenInfo();   // the fid that we return when we gather the neccesary info from proccesses
+	if(finfo!=NOFILE) {  
+
+		/* Print per-process info 
+		   The info variable is type struct procinfo which is declared inside tinyos.h
+		   We pass its char pointer as a buffer to write for the Read() function,
+		   so that the byte stream(character array) that the Read() returns, is converted
+		   back to procinfo struct!
+		   Remember: to put the procinfo struct inside the character buffer of read, use:
+		   memcpy(buf, (char*)&procinfo_cb->procinfo, sizeof(procinfo))
+		*/
 		procinfo info;
+
 		printf("%5s %5s %6s %8s %20s\n",
 			"PID", "PPID", "State", "Threads", "Main program"
 			);
-		/* Read in next piece of info */		
-		while(Read(finfo, (char*) &info, sizeof(info)) > 0) {
+		/* Read in next piece of info 
+		   Our goal with the last part of the project, is  to use OpenInfo()
+		   to return the appropriate finfo Fid_t for the code below to read.
+		*/		
+		while(Read(finfo, (char*) &info, sizeof(info)) > 0) {  // > 0 because Read() returns 0 if at EOF
 			Program prog=NULL;
 			const char* argv[10];
 			int argc = ParseProcInfo(&info, &prog, 10, argv);
@@ -194,7 +206,7 @@ int SystemInfo(size_t argc, const char** argv)
 				info.ppid,
 				(info.alive?"ALIVE":"ZOMBIE"),
 				info.thread_count,
-				pname
+				pname  // the name of the task, alongside with arguments
 				);
 		}
 	}
