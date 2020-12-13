@@ -271,7 +271,7 @@ int pipe_reader_close(void* _pipecb){
     pipe_CB->reader = NULL;
 
     // Say to others that reader is closed      |
-    // So wake the writers                      | false because reader == Null and pipe write will  
+    // So wake the writers                      | false because reader == Null and pipe write will  retutn -1
     // kernel_broadcast(&pipe_CB->has_space);   |
 
     // Unalocate the Pipe Control Bock if both reader-writer are closed
