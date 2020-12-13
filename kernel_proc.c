@@ -377,18 +377,18 @@ int procinfo_read(void* procinfo_arg, char *buf, unsigned int size){
   /*might be possible to do just with the procinfo from the arguments*/
   procinfo* new_proc_info = init_procinfo();
 
-  if (proc_info->PT_cursor == MAX_PROC  || proc_info == NULL  || buf == NULL)
+  if (proc_info->PT_cursor == (MAX_PROC-1)  || proc_info == NULL  || buf == NULL)
     return -1;
 
   /*get the "current" pcb*/
-  PCB* current_pcb = PT[&proc_info->PT_cursor];
+  PCB* current_pcb = &PT[proc_info->PT_cursor];
 
   /*bypass every non-active pcb*/
   while(current_pcb->pstate == FREE) {
-    if (proc_info->PT_cursor == MAX_PROC)
-      return -1;
+    if (proc_info->PT_cursor == (MAX_PROC-1))
+      return -1;  // could be 0? or not??
     proc_info->PT_cursor++;
-    current_pcb = PT[&proc_info->PT_cursor];
+    current_pcb = &PT[proc_info->PT_cursor];
   }
 
   /*start filling the proc_info struct with the data of the current PCB*/
@@ -405,11 +405,12 @@ int procinfo_read(void* procinfo_arg, char *buf, unsigned int size){
 
   /*get args and argv*/
 
+
   proc_info->PT_cursor++;
 
 
   /*memcpy new_proc_info as byte array to the buff given from the arguments*/
-
+  memcpy(buf,(char*)new_proc_info,sizeof(new_proc_info));
 
   free(new_proc_info);
 
