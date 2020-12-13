@@ -24,7 +24,7 @@ unsigned int process_count;
 static file_ops procinfo_ops = {
   .Open = NULL,
   .Read = procinfo_read,
-  .Write = NULL,
+  .Write = procinfo_write,
   .Close = procinfo_close
 };
 
@@ -358,30 +358,69 @@ Fid_t sys_OpenInfo()
 procinfo* init_procinfo(){
 
   procinfo* info= (procinfo*)xmalloc(sizeof(procinfo));
-  /*set the curor to 0*/
+  /*set everything to 0*/
   info->PT_cursor = 0;
-  /*Get the pid of the process*/
-  info->pid = get_pid(&PT[info->PT_cursor]);  // could be empty?
-
+  info->pid = 0;
   info->ppid = 0;
-
   info->alive = 0;
-
   info->thread_count = 0;
-
   info->argl = 0;
-
   //info->args = '';  // causes weird behaviour
-
   return info;
-
 }
 
-int procinfo_read(void* procinfo, char *buf, unsigned int size){
+
+int procinfo_read(void* procinfo_arg, char *buf, unsigned int size){
+  /*the cast is neccessary from a void pointer*/
+  procinfo* proc_info  = (procinfo*)procinfo_arg;
+
+  /*might be possible to do just with the procinfo from the arguments*/
+  procinfo* new_proc_info = init_procinfo();
+
+  if (proc_info->PT_cursor == MAX_PROC  || proc_info == NULL  || buf == NULL)
+    return -1;
+
+  /*get the "current" pcb*/
+  PCB* current_pcb = PT[&proc_info->PT_cursor];
+
+  /*bypass every non-active pcb*/
+  while(current_pcb->pstate == FREE) {
+    if (proc_info->PT_cursor == MAX_PROC)
+      return -1;
+    proc_info->PT_cursor++;
+    current_pcb = PT[&proc_info->PT_cursor];
+  }
+
+  /*start filling the proc_info struct with the data of the current PCB*/
+  new_proc_info->pid = get_pid(current_pcb);
+  new_proc_info->ppid = get_pid(current_pcb->parent);  // get the pid of the parent 
+
+  if(current_pcb->pstate == ZOMBIE)
+    new_proc_info->alive = 0;
+  else
+    new_proc_info->alive = 1;
+
+  new_proc_info->thread_count = current_pcb->thread_count;
+  new_proc_info->main_task = current_pcb->main_task;
+
+  /*get args and argv*/
+
+  proc_info->PT_cursor++;
 
 
+  /*memcpy new_proc_info as byte array to the buff given from the arguments*/
+
+
+  free(new_proc_info);
+
+  return sizeof(new_proc_info);
+}
+
+
+int procinfo_write(void* procinfo, const char *buf, unsigned int size){
   return -1;
 }
+
 
 int procinfo_close(void* info){         
   procinfo* proc_info = (procinfo*) info;  
