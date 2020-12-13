@@ -723,8 +723,6 @@ typedef struct procinfo
   int alive;      /**< @brief Non-zero if process is alive, zero if process is zombie. */
 	
   unsigned long thread_count; /**< Current no of threads. */
-
-  int PT_cursor;  // the integer index of PT array
 	
   Task main_task;  /**< @brief The main task of the process. */
 	
@@ -733,14 +731,24 @@ typedef struct procinfo
             Note that this is the
             real argument length, not just the length of the @c args field, which is
             limited at @c PROCINFO_MAX_ARGS_SIZE. */
-	char args[PROCINFO_MAX_ARGS_SIZE]; /**< @brief The first 
+	char args[PROCINFO_MAX_ARGS_SIZE]; 
+  int PT_cursor;
+  /**< @brief The first 
     @c PROCINFO_MAX_ARGS_SIZE bytes of the argument of the main task. 
+  
 
     If the task's argument is longer (as designated by the @c argl field), the
     bytes contained in this field are just the prefix.  */
 } procinfo;
 
-
+typedef struct procinfo_cb{ 
+  procinfo process_info;  
+  int PT_cursor;  // the integer index of PT array
+}procinfo_CB;
+// typedef struct procinfo_cb{ 
+//   procinfo process_info;  
+//   int PT_cursor;  // the integer index of PT array
+// }
 
 /**
 	@brief Open a kernel information stream.

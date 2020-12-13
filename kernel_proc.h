@@ -103,11 +103,9 @@ Pid_t get_pid(PCB* pcb);
 #endif
 
 
-//just declaration of the read/close functions for procinfo/SysInfo
-int procinfo_read();
 
-int procinfo_write();
-
-int procinfo_close();
-
-procinfo* init_procinfo();
+int procinfo_read(void* procinfo, char *buf, unsigned int size);
+int procinfo_close(void* info);
+int procinfo_write(void* procinfo, const char *buf, unsigned int size);
+procinfo_CB* init_procinfo_cb();
+Fid_t sys_OpenInfo();

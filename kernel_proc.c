@@ -16,17 +16,16 @@
  - GetPPid
 
  */
-
-/* The process table */
-PCB PT[MAX_PROC];
-unsigned int process_count;
-
 static file_ops procinfo_ops = {
   .Open = NULL,
   .Read = procinfo_read,
   .Write = procinfo_write,
   .Close = procinfo_close
 };
+
+/* The process table */
+PCB PT[MAX_PROC];
+unsigned int process_count;
 
 PCB* get_pcb(Pid_t pid)
 {
@@ -345,7 +344,7 @@ Fid_t sys_OpenInfo()
     return NOFILE;  // not -1 because nofile is handled without throwing an exception in SysInfo()
   }
 
-  procinfo* proc_info = init_procinfo();
+  procinfo_CB* proc_info = init_procinfo_cb();
 
   fcb->streamobj = proc_info;  // Link FCB--->procinfo struct
 
@@ -354,77 +353,72 @@ Fid_t sys_OpenInfo()
   return fid;
 }
 
+procinfo_CB* init_procinfo_cb(){
 
-procinfo* init_procinfo(){
-
-  procinfo* info= (procinfo*)xmalloc(sizeof(procinfo));
-  /*set everything to 0*/
+  procinfo_CB* info= (procinfo_CB*)xmalloc(sizeof(procinfo_CB));
+  /*set the cursor to 0*/
   info->PT_cursor = 0;
-  info->pid = 0;
-  info->ppid = 0;
-  info->alive = 0;
-  info->thread_count = 0;
-  info->argl = 0;
-  //info->args = '';  // causes weird behaviour
+  /*Get the pid of the process*/
+  // info->process_info.pid = NULL;
+
+  // info->process_info.ppid = NULL;
+
+  info->process_info.alive = 0;
+
+  info->process_info.thread_count = 0;
+
+  info->process_info.argl = 0;
+
   return info;
 }
 
+int procinfo_read(void* info, char* buf, unsigned int size){
+  procinfo_CB* prinfoCB = (procinfo_CB*) info;
 
-int procinfo_read(void* procinfo_arg, char *buf, unsigned int size){
-  /*the cast is neccessary from a void pointer*/
-  procinfo* proc_info  = (procinfo*)procinfo_arg;
-
-  /*might be possible to do just with the procinfo from the arguments*/
-  procinfo* new_proc_info = init_procinfo();
-
-  if (proc_info->PT_cursor == (MAX_PROC-1)  || proc_info == NULL  || buf == NULL)
+  if(prinfoCB->PT_cursor > MAX_PROC-1 || prinfoCB == NULL || buf == NULL) //size?
     return -1;
 
-  /*get the "current" pcb*/
-  PCB* current_pcb = &PT[proc_info->PT_cursor];
+  PCB* current_pcb = &PT[prinfoCB->PT_cursor];      
 
-  /*bypass every non-active pcb*/
   while(current_pcb->pstate == FREE) {
-    if (proc_info->PT_cursor == (MAX_PROC-1))
-      return -1;  // could be 0? or not??
-    proc_info->PT_cursor++;
-    current_pcb = &PT[proc_info->PT_cursor];
+    prinfoCB->PT_cursor++;
+    if (prinfoCB->PT_cursor >= MAX_PROC )
+      return -1;
+    current_pcb = &PT[prinfoCB->PT_cursor];
   }
 
-  /*start filling the proc_info struct with the data of the current PCB*/
-  new_proc_info->pid = get_pid(current_pcb);
-  new_proc_info->ppid = get_pid(current_pcb->parent);  // get the pid of the parent 
+  prinfoCB->process_info.pid = get_pid(current_pcb);
+  prinfoCB->process_info.ppid = get_pid(current_pcb->parent);
 
   if(current_pcb->pstate == ZOMBIE)
-    new_proc_info->alive = 0;
+    prinfoCB->process_info.alive = 0;
   else
-    new_proc_info->alive = 1;
+    prinfoCB->process_info.alive = 1;
 
-  new_proc_info->thread_count = current_pcb->thread_count;
-  new_proc_info->main_task = current_pcb->main_task;
+  prinfoCB->process_info.thread_count = current_pcb->thread_count;
+  prinfoCB->process_info.main_task = current_pcb->main_task;
 
-  /*get args and argv*/
+  prinfoCB->process_info.argl = current_pcb->argl;
+  if(current_pcb->args!=NULL) {
+    memcpy(&prinfoCB->process_info.args, current_pcb->args, prinfoCB->process_info.argl);
+  }
+  // else
+  //   new_proc_info->args=NULL;
 
+  memcpy(buf,&prinfoCB->process_info,sizeof(prinfoCB->process_info));
+  
+  prinfoCB->PT_cursor++;
 
-  proc_info->PT_cursor++;
+  return sizeof(prinfoCB->process_info);
 
-
-  /*memcpy new_proc_info as byte array to the buff given from the arguments*/
-  memcpy(buf,(char*)new_proc_info,sizeof(new_proc_info));
-
-  free(new_proc_info);
-
-  return sizeof(new_proc_info);
 }
-
 
 int procinfo_write(void* procinfo, const char *buf, unsigned int size){
   return -1;
 }
 
-
 int procinfo_close(void* info){         
-  procinfo* proc_info = (procinfo*) info;  
+  procinfo_CB* proc_info = (procinfo_CB*) info;  
 
   if (proc_info == NULL)  // if already NULL we may not be able to free it
     return -1;  //signal failure
@@ -433,5 +427,4 @@ int procinfo_close(void* info){
 
   return 0;
 }
-
 
