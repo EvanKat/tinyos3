@@ -2,15 +2,27 @@
 #include "tinyos.h"
 #include "kernel_socket.h"
 
-
+/*	The function that Read() uses to get data from a socket	
+	Arguments:
+	-scb_t pointer to an SCB object
+	-buf buffer to return the data by reference
+	-size to know how many bytes to read 
+*/
 int socket_read(void* scb_t, char *buf, unsigned int size){
 	SCB* scb=(SCB*) scb_t;
+	/* We need the SCB to exist and be a peer socket*/
 	if(scb == NULL ||scb->type != SOCKET_PEER)
 		return -1;
 
 	return pipe_read(scb->peer_s.read_pipe, buf, size);
 }
 
+/*	The function that Write() uses to write data in a socket	
+	Arguments:
+	-scb_t pointer to an SCB object
+	-buf buffer to get data by reference
+	-size to know how many bytes to write from the buffer 
+*/
 int socket_write(void* scb_t, const char *buf, unsigned int size){
 	SCB* scb=(SCB*) scb_t;
 	if(scb == NULL || scb->type != SOCKET_PEER)
@@ -18,38 +30,43 @@ int socket_write(void* scb_t, const char *buf, unsigned int size){
 
 	return pipe_write(scb->peer_s.write_pipe, buf, size);
 }
-	
+
+/*	Close the socket(stop anyone from reading or writing).
+	Arguments:
+	-scb_t pointer to an SCB object
+*/	
 int socket_close(void* scb_t){
 	SCB* scb=(SCB*) scb_t;
 
 	if(scb == NULL)
 		return -1;
-
+	/*	Handle each SCB according to its type */
 	switch(scb->type){
 		case SOCKET_LISTENER:
-			while(rlist_len(&scb->listen_s.queue) != 0){
-				rlnode* trash = rlist_pop_front(&scb->listen_s.queue);
-				kernel_signal(&trash->c_req->connected_cv);
+			while(rlist_len(&scb->listen_s.queue) != 0){  /*While it still has requests*/
+				rlnode* trash = rlist_pop_front(&scb->listen_s.queue); /* pop one request */
+				free(trash);  /* free the allocated space */
 			}
-			PORT_MAP[scb->port] = NULL;
-			scb->port = NOPORT;
-			kernel_signal(&scb->listen_s.req_available);
-			break;
+			PORT_MAP[scb->port] = NULL;  /* free the space in the PORT_MAP */
+			scb->port = NOPORT;  
+			kernel_signal(&scb->listen_s.req_available);  // if we close the stream while someone
+			break;										  // is sleeping on our condition variable(see Connect())
 		case SOCKET_PEER:
-			pipe_reader_close(scb->peer_s.read_pipe);
+			pipe_reader_close(scb->peer_s.read_pipe);  // just close the pipes
 			pipe_writer_close(scb->peer_s.write_pipe);
 			break;
 		default:
 			break;
 	}
 
+	/* Decrement refcount of the SCB, to know when to delete it*/
 	scb->refcount--;
 	if (scb->refcount < 0)
 		free(scb);
 
 	return 0;
 }
-//FILE OPERATIONS
+
 static file_ops socketOperations = {
 	.Open = NULL,
 	.Read = socket_read,
@@ -57,20 +74,20 @@ static file_ops socketOperations = {
 	.Close = socket_close
 };
 
-// Allocation, initialize and return a new socket control block
+// Allocate, initialize and return a new socket control block
 SCB* new_socket(port_t p){
-	// Allocation
+	// Allocation of space
 	SCB* socket=(SCB*)xmalloc(sizeof(SCB));
 	// Initialization
 	socket->refcount = 0;
 	socket->port = p;
-	socket->type = SOCKET_UNBOUND;
+	socket->type = SOCKET_UNBOUND;  /* at the beginning of its little life, it is unbound*/
 	return socket;
 }
 
-
+/* Returns the pointer to SCB from a file id */
 SCB* get_scb(Fid_t sock){
-	FCB* socket_fcb = get_fcb(sock);
+	FCB* socket_fcb = get_fcb(sock);  /* returns pointer to an FCB */
 
 	if(socket_fcb == NULL)
 		return NULL;
@@ -92,7 +109,7 @@ SCB* get_scb(Fid_t sock){
 */
 Fid_t sys_Socket(port_t port)
 {	
-	// In case of no valid Port_t
+	/* In case of an invalid port, return error */
 	if(port < 0 || port > MAX_PORT){
 		return NOFILE;
 	}
@@ -100,7 +117,7 @@ Fid_t sys_Socket(port_t port)
 	Fid_t fid;
 	FCB* fcb;
 
-	// ?Check if valid fid and 
+	// Allocate and link an FCB with a file id */
 	if(!FCB_reserve(1, &fid, &fcb))
 		return NOFILE;
 
@@ -185,43 +202,42 @@ Fid_t sys_Accept(Fid_t lsock)
 
 	listener->refcount++;
 
-	// While queue of request is empty and listener port is NOPORT then wait 
+	// While queue of request is empty and listener port is NOPORT, wait 
+	// if listener->port == NOPORT , it means that it's closed(see socket_close())
 	while (rlist_len(&listener->listen_s.queue) == 0 && listener->port != NOPORT){ 
 		kernel_wait(&listener->listen_s.req_available, SCHED_PIPE);
 	}
 
-	// If listener port is NOPORT the fail
+	// If listener port is NOPORT (e.g. closed), then fail
 	if (listener->port == NOPORT)
 		return NOFILE;
 
 	// Take the 1st waiting connection request
 	rlnode* request = rlist_pop_front(&listener->listen_s.queue);
-	// The connection(&socket) that waited to connect
+	// The connection request that waited to connect
 	c_req* c_req = request->c_req;
 
-	// The fid that point to the newly created unbound server socket
+	// The fid that points to the newly created unbound server socket
 	Fid_t serv_fid = sys_Socket(listener->port);
 	
 	// Server SCB
 	SCB* server_scb = get_scb(serv_fid);
-	// &&&&&&&&&&&&&&&&&&&&&&
-	// In case of bad constraction of socket
+	// In case of failed construction of socket
 	if (server_scb == NULL)
 		return NOFILE;
 
-	// Set the type of server
+	// Set the type of server to peer(it was unbound)
 	server_scb->type = SOCKET_PEER;
-	// Requester Socket
+	// Get the pointer to the requester Socket 
 	SCB* client_scb = c_req->peer;
-	// Set the type of client
+	// Set the type of client (requester socket)
 	client_scb->type = SOCKET_PEER;
 
-	// TODO: Check the union tyoe for client. Can we rechange it?
-    // connect peers 
+    // connect peers  with each other(remember: they are not network sockets)
 	server_scb->peer_s.peer = client_scb;
 	client_scb->peer_s.peer = server_scb;
 
-	// Initiallise 
+	// Initialise da pipes
 	Pipe_CB* p1 = pipe_init();
 	Pipe_CB* p2 = pipe_init();
 
@@ -233,24 +249,26 @@ Fid_t sys_Accept(Fid_t lsock)
 	p2->writer = client_scb->fcb;
 	p2->reader = server_scb->fcb;
 
-	// Set teh functions of Server<->Client sockets
+	// Set the functions of Server<->Client sockets
 	server_scb->fcb->streamfunc = &socketOperations;
 	client_scb->fcb->streamfunc = &socketOperations;
 
 	// Connect server socket with pipes
-	server_scb->peer_s.write_pipe = p1;
+	server_scb->peer_s.write_pipe = p1;  // write pipe = pointer to pipe_CB
 	server_scb->peer_s.read_pipe = p2;
+
 	// Connect client socket with pipes
 	client_scb->peer_s.read_pipe = p1;
 	client_scb->peer_s.write_pipe = p2;
 
-	// Requester admitted
+	// Requester admitted, to tell the owner of the request that it has been admitted
 	c_req->admitted=1;
+
 	// One request passed
 	listener->refcount--;
 
-	// TODO: where to set
-	 if (listener->refcount < 0) //REVISIT THIS
+	/* If nobody needs the listener socket, there is no meaning in its life... */
+	if (listener->refcount < 0) 
 	 	free(listener);
 
 
@@ -302,27 +320,25 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
 
 
 	SCB* listener_scb = PORT_MAP[port];
-	// Add the request to the listener's list
+	// Add the request to the listener's request list
 	rlist_push_back(&listener_scb->listen_s.queue, &request->queue_node);
-	// Signal the listener that there is a request to handle!
+	// Signal the listener SCB that there is a request to handle!
 	kernel_signal(&listener_scb->listen_s.req_available); 
 
-	// How it works
-	// The result of the kernel_timedwait() will be stored here
+	
 	timeout_t timeout_result;  
-	//IMPORTANT: the connect() function waits in the condvar of the request(struct)
+	//the connect() function waits in the condvar of the listener
 	//When the accept() accepts the request, it has to signal that condition variable
 	//to begin the data exchange.
-	
 	//sleep on the listener's condvar for a specified amount of time(when he accept()'s us, he will wake us up)
 	timeout_result = kernel_timedwait(&listener_scb->listen_s.req_available, SCHED_PIPE, timeout);
 
 	if (timeout_result==0){
-		// the above condition satisfied means (not sure) that the kernel wait was timed out
+		// the above condition satisfied means that the kernel wait was timed out
 		// so we remove the request from the listener scb list and free its space
 		rlist_remove(&request->queue_node);
 		free(request);
-		return -1;
+		return -1;  // we failed to pass the request(it wasn't admitted)
 	}
 
 
@@ -330,7 +346,7 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
 	socket->refcount--;
 	if (socket->refcount < 0)
 		free(socket);
-	// TODO: Need to check if refcount == 0
+
 	return 0;
 }
 
@@ -372,7 +388,9 @@ int sys_ShutDown(Fid_t sock, shutdown_mode how)
 
 	if( socket_cb == NULL || socket_cb->type != SOCKET_PEER)
 		return -1;
-	int ret;
+
+	int ret;  /*the return value*/
+
 	switch(how){
 		case SHUTDOWN_READ:
 			if(!(ret = pipe_reader_close(socket_cb->peer_s.read_pipe)))
@@ -394,24 +412,23 @@ int sys_ShutDown(Fid_t sock, shutdown_mode how)
 	return -1;
 }
 
-
-// // TODO: use this instead of refcount-- in the code
-
-// // A function to decrement the refcount SCB counter and 
-// // delete/free the space if no one points to the arg SCB
-// void decref_SCB(SCB * socket_cb){
-// 	socket_cb->refcount--;
-// 	//If therefcount == 0, do one of three cases:
-// 	if(socket_cb->refcount == 0){
-// 		if(socket_cb->type == SOCKET_PEER){ // if its a non-reffered-anywhered peer, it has no purpose
-// 			free(socket_cb->s_type.peer_s);
-// 			free(socket_cb);
-// 			}
-// 		if(socket_cb->type == SOCKET_UNBOUND)
-// 			free(socket_cb);
-// 		if(socket_cb->type == SOCKET_LISTENER){
-// 			free(socket_cb->sa_type.listen_s);
-// 			free(socket_cb);
-// 		}
-// 	}
-// }
+/*
+// A function to decrement the refcount SCB counter and 
+// delete/free the space if no one points to the arg SCB
+void decref_SCB(SCB * socket_cb){
+	socket_cb->refcount--;
+	//If therefcount == 0, do one of three cases:
+	if(socket_cb->refcount == 0){
+		if(socket_cb->type == SOCKET_PEER){ // if its a non-reffered-anywhered peer, it has no purpose
+			free(socket_cb->s_type.peer_s);
+			free(socket_cb);
+			}
+		if(socket_cb->type == SOCKET_UNBOUND)
+			free(socket_cb);
+		if(socket_cb->type == SOCKET_LISTENER){
+			free(socket_cb->sa_type.listen_s);
+			free(socket_cb);
+		}
+	}
+}
+*/

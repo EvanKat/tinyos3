@@ -17,7 +17,7 @@ static file_ops writeOperations = {
 };
 
 /**
-@brief Inisialize the Pipe Control Bock.
+@brief Initialize the Pipe Control Block.
 
 @returns The Initialized Pipe Control Block
 */ 
@@ -29,11 +29,11 @@ Pipe_CB* pipe_init() {
     new_Pipe_CB->reader = NULL;
     new_Pipe_CB->writer = NULL;
 
-    // Reader and writer possition of the buffer
+    // Reader and writer position of the buffer
     new_Pipe_CB->w_position = 0;
     new_Pipe_CB->r_position = 0;
 
-    // Condiotion variables initialized (for waiting). 
+    // Condition variables initialized 
     new_Pipe_CB->has_space = COND_INIT;
     new_Pipe_CB->has_data = COND_INIT;
 
@@ -44,11 +44,10 @@ Pipe_CB* pipe_init() {
 }
 
 /**
-    @brief @brief Construct and return a pipe id.
+    @brief @brief Construct and returns two file id's by reference.
 
     Firstly acquire a number of FCBs and corresponding fids by calling FCB_reserve().
-    After the succeded reservation, the fid's of the given pipe are set to the reserved 
-    fid's. Then the pipe is initialized, streams are connected to the pipe control block (@c streamobj)
+    Then the pipe is initialized, streams are connected to the pipe control block (@c streamobj)
    
     @param pipe a pointer to a pipe_t structure for storing the file ids.
     @returns 0 on success, or -1 on error. Possible reasons for error:
@@ -66,18 +65,18 @@ int sys_Pipe(pipe_t* pipe)
         return -1;
     }
 
-    // Return read & write fid
+    // Return read & write fid (by reference)
     pipe->read = fid[0];
     pipe->write = fid[1];
 
     // Initialize new Pipe Control block
     Pipe_CB* new_pipe_cb = pipe_init();
 
-    // Set streams
+    // Set streams to point to the pipe_cb objects
     fcb[0]->streamobj = new_pipe_cb;
     fcb[1]->streamobj = new_pipe_cb;
 
-    // Save the read and write FCBs
+    // Save the read and write FCBs 
     new_pipe_cb->reader = fcb[0];
     new_pipe_cb->writer = fcb[1];
 
@@ -98,23 +97,22 @@ int sys_Pipe(pipe_t* pipe)
     4) The reader is activated.\n
     5) The writer is activated in order to proceed (sockets).\n
 
-    The "size" bytes of source buffer are stored into the PipeCB buffer one by one. At every entry 
-    the word length counter and writer possition increments.
-    If word length = length of pipe buffer the pipe is waiting until space is available
+    The "size" bytes of source buffer are stored into the PipeCB buffer one by one. 
+    At every entry the word length counter and writer possition increments.
+    If word length == length of pipe buffer the pipe is waiting until space is available
     
-    The pipe buffer is bounded.
+    The pipe buffer is bounded(ring).
 
-    At the end broadcast that data are available to read. (wake up reader) 
+    At the end broadcast that data is available to read(wake up reader).
     
-    @param pipecb_t A pipe id.
-    @param *buff The buffer to read from the data
-    @param size The max size to write at the pipe's buffer
-    @returns The number of stored bytes
+    @param pipecb_t A pointer to a pipe_CB object.
+    @param *buf The buffer with the data to write.
+    @param size The max size to write at the pipe's buffer(bytes).
+    @returns The number of bytes we wrote.
 */
 int pipe_write(void* pipecb_t, const char *buf, unsigned int size){
     Pipe_CB* pipe_CB = (Pipe_CB*)pipecb_t;
     
-    // Checks
     if(pipe_CB==NULL || buf==NULL || size < 1 || pipe_CB->writer == NULL || pipe_CB->reader == NULL)
         return -1;
 
@@ -123,30 +121,31 @@ int pipe_write(void* pipecb_t, const char *buf, unsigned int size){
 
 
     while(buffer_counter < size && pipe_CB->reader != NULL){
-        // Store byte
+        // Store byte from our given buffer to the pipe_CB buffer
         pipe_CB->buffer[pipe_CB->w_position] = buf[buffer_counter];
         
-        // Inc w_position
+        // Increment w_position
         pipe_CB->w_position++;
-        // Inc word length
+        // Increment word length(distance between w and r position)
         pipe_CB->word_length++;
         
 
-        // If writer wrote all buffer and reader is sleeping 
+        // If writer wrote all buffer and reader is sleeping
+        // until new data is read from the pipe, to free space 
         while(pipe_CB->word_length == (int)PIPE_BUFFER_SIZE)
             kernel_wait(&pipe_CB->has_space,SCHED_PIPE);
 
-        // If buffer reached the end and need of store more data set w_position to 0 (Bounded Buffer)
+        // When writer pointer reaches end of buffer, cycle to the beginning
         if(pipe_CB->w_position == ((int)PIPE_BUFFER_SIZE - 1)){
             pipe_CB->w_position = 0;
         }
-        // Signal the reader 
+        // Signal the reader that there are data available to read
         kernel_broadcast(&pipe_CB->has_data);
-        // Inc buffer counter 
+        // Increment buffer counter 
         buffer_counter++;
 
     }
-    ////////////////////////////////////////////////////////////
+    
     if(pipe_CB->reader == NULL && pipe_CB->word_length == size)
         return -1;
     return buffer_counter;
@@ -162,23 +161,22 @@ int pipe_write(void* pipecb_t, const char *buf, unsigned int size){
     3) The given size is valid.\n
     4) The reader is activated in order to proceed (sockets).\n
 
-    The "size" bytes of pipe's buffer are stored into the given buffer one by one. At every entry 
-    the word length counter decrements and writer possition increments.
+    The "size" bytes of pipe's buffer are stored into the given buffer one by one. At every char
+    we read, the reader position increments, and word length decrements.
     If word length = 0 in the pipe buffer the pipe reader is waiting until data are available
     
-    If 
     The pipe buffer is bounded.
 
     At the end broadcast that new space is available to write. (wake up writer) 
     
-    @param pipecb_t A pipe id to read data from.
-    @param *buff The buffer to store the data
-    @param size The max size to read from the pipe's buffer
+    @param pipecb_t A pointer to a pipe_cb to read data from.
+    @param *buf The buffer to store the data
+    @param size The max size to read from the pipe's buffer(bytes)
     @returns The number of stored bytes
 */
 int pipe_read(void* pipecb_t, char *buf, unsigned int size){
     Pipe_CB* pipe_CB = (Pipe_CB*)pipecb_t;
-    // Checks
+    
     if(pipe_CB==NULL || buf==NULL || size<1 || pipe_CB->reader == NULL )
         return -1;
 
@@ -189,30 +187,31 @@ int pipe_read(void* pipecb_t, char *buf, unsigned int size){
         // No data to Read
         while(pipe_CB->word_length==0){
             if(pipe_CB->writer == NULL)
-                /* In case there is no more data stored and writer is closed,
-                        return how much data has already been read
+                /*  In case there is no more data stored and writer is closed,
+                    return how much data has already been read.
                     If writer was already closed when pipe_read() was called
-                                then it will return 0.
+                    then it will return 0.
                 */
                 return buffer_counter;
+            /* if we expect someone to write, sleep till then*/
             kernel_wait(&pipe_CB->has_data, SCHED_PIPE);
         }
 
         // Store the data that read
         buf[buffer_counter] = pipe_CB->buffer[pipe_CB->r_position];
-        // Next read position
+        // Move to the next read position
         pipe_CB->r_position++;
         // Word length decrements
         pipe_CB->word_length--;
 
-        // If buffer reached the end and need of read more data set r_position to 0 (Bounded Buffer)
+        // // When reader pointer reaches end of buffer, cycle to the beginning (Bounded Buffer)
         if(pipe_CB->r_position == ((int)PIPE_BUFFER_SIZE - 1)){
             pipe_CB->r_position = 0;
         }
-        // If word_length is lesser than PIPE_BUFFER_SIZE then there is space to write new data.
+        // If word_length < PIPE_BUFFER_SIZE then there is space to write new data.
         if(pipe_CB->word_length<PIPE_BUFFER_SIZE)
             kernel_broadcast(&pipe_CB->has_space);
-        // Inc buffer_counter
+        // Increment buffer_counter
         buffer_counter++;
     }
     
@@ -223,11 +222,11 @@ int pipe_read(void* pipecb_t, char *buf, unsigned int size){
     @brief Close the write end of the given pipe.
     
     If the given pipe exists and and the writer is activated 
-    then the writer sets to NULL.
+    then the writer is set to NULL.
     
     If the reader is also NULL then free Pipe Control Block
 
-    @param _pipecb: Pipe id.
+    @param _pipecb: Pipe id(pointer to pipe_CB).
     @returns 0 on success and -1 in case of error.
 */
 int pipe_writer_close(void* _pipecb){
@@ -243,7 +242,7 @@ int pipe_writer_close(void* _pipecb){
     // Wake reader to read the remaining data
     kernel_broadcast(&pipe_CB->has_data);
 
-    // If reader fCB is NULL too free pipe control block
+    // If reader FCB is NULL too, free pipe control block
     if (pipe_CB->reader == NULL)
         free(pipe_CB);
     return 0;
@@ -257,7 +256,7 @@ int pipe_writer_close(void* _pipecb){
     
     If the writer is also NULL then free Pipe Control Block
 
-    @param _pipecb: Pipe id.
+    @param _pipecb: Pipe id (pointer to pipe_CB).
     @returns 0 on success and -1 in case of error.
   */
 int pipe_reader_close(void* _pipecb){
@@ -270,11 +269,7 @@ int pipe_reader_close(void* _pipecb){
     // Set reader FCB to null
     pipe_CB->reader = NULL;
 
-    // Say to others that reader is closed      |
-    // So wake the writers                      | false because reader == Null and pipe write will  retutn -1
-    // kernel_broadcast(&pipe_CB->has_space);   |
-
-    // Unalocate the Pipe Control Bock if both reader-writer are closed
+    // Deallocate the Pipe Control Bock if both reader-writer are closed
     if(pipe_CB->writer == NULL)
         free(pipe_CB);
 

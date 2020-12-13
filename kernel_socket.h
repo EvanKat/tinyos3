@@ -18,7 +18,7 @@ typedef struct connection_request{
   int admitted; // a flag that shows if the connection request is already accepted or not
   SCB* peer;  //points to the socket that made the rekuest
   
-  CondVar connected_cv;  // shows that its connected?maybe?
+  CondVar connected_cv;  
   rlnode queue_node;  // intrusive list node. Used in the queue rlnode in the listen SCB.
 }c_req;
 
