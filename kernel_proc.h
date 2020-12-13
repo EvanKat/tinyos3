@@ -103,7 +103,7 @@ Pid_t get_pid(PCB* pcb);
 #endif
 
 
-
+/*Just Forward Declaration of the functions */
 int procinfo_read(void* procinfo, char *buf, unsigned int size);
 int procinfo_close(void* info);
 int procinfo_write(void* procinfo, const char *buf, unsigned int size);

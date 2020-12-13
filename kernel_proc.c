@@ -334,7 +334,11 @@ void sys_Exit(int exitval)
   sys_ThreadExit(exitval);
 }
 
-
+/* Consturcts the main procinfo_cb that will be used by SysInfo command
+   Connects the FCB assigned from FCB_reserve to our procinfo streamobj(struct) 
+   and streamfunc(struct of pointers to functions.)
+   Returns the fid to access all the above(functions and data)
+*/
 Fid_t sys_OpenInfo()
 {
   Fid_t fid;
@@ -350,18 +354,19 @@ Fid_t sys_OpenInfo()
 
   fcb->streamfunc = &procinfo_ops;  // Link FCB--->procinfo_ops
 
-  return fid;
+  return fid;  
 }
 
+/* Create an "empty"  procinfo_CB object */
 procinfo_CB* init_procinfo_cb(){
-
+  /*Allocate the space needed from the object*/
   procinfo_CB* info= (procinfo_CB*)xmalloc(sizeof(procinfo_CB));
   /*set the cursor to 0*/
   info->PT_cursor = 0;
-  /*Get the pid of the process*/
-  // info->process_info.pid = NULL;
 
-  // info->process_info.ppid = NULL;
+  info->process_info.pid = 0;
+
+  info->process_info.ppid = 0;
 
   info->process_info.alive = 0;
 
@@ -372,14 +377,23 @@ procinfo_CB* init_procinfo_cb(){
   return info;
 }
 
+/* The function that will be used to return the info for *a single* PCB.
+   it is called repetitively in the SysInfo() function of vsam.
+   Gets as arguments a pointer to a procinfo_CB(to store the PT cursor)
+   a pointer to a buffer to pass the info by reference, and the size of 
+   the information as "size"(passed as sizeof(procinfo) by vsam.)
+*/
 int procinfo_read(void* info, char* buf, unsigned int size){
   procinfo_CB* prinfoCB = (procinfo_CB*) info;
 
+  /* Check if we are at a valid place in the PT(process table) */
   if(prinfoCB->PT_cursor > MAX_PROC-1 || prinfoCB == NULL || buf == NULL) //size?
     return -1;
 
+  /* Get the PCB from the current place in the PT*/
   PCB* current_pcb = &PT[prinfoCB->PT_cursor];      
 
+  /* Bypass all the non-active PT cells*/
   while(current_pcb->pstate == FREE) {
     prinfoCB->PT_cursor++;
     if (prinfoCB->PT_cursor >= MAX_PROC )
@@ -387,6 +401,10 @@ int procinfo_read(void* info, char* buf, unsigned int size){
     current_pcb = &PT[prinfoCB->PT_cursor];
   }
 
+  /*  Get all the info from the current PCB and pass it inside the prinfoCB object
+      to later be transferred as a "packet" by reference to the caller of the 
+      procinfo_read.
+  */
   prinfoCB->process_info.pid = get_pid(current_pcb);
   prinfoCB->process_info.ppid = get_pid(current_pcb->parent);
 
@@ -398,26 +416,35 @@ int procinfo_read(void* info, char* buf, unsigned int size){
   prinfoCB->process_info.thread_count = current_pcb->thread_count;
   prinfoCB->process_info.main_task = current_pcb->main_task;
 
+  /* To safely pass the characters of args of the PCB to the args of the procinfo_CB*/
   prinfoCB->process_info.argl = current_pcb->argl;
   if(current_pcb->args!=NULL) {
     memcpy(&prinfoCB->process_info.args, current_pcb->args, prinfoCB->process_info.argl);
   }
-  // else
-  //   new_proc_info->args=NULL;
 
+  /*  The magic happens here: The prinfoCB that we created above, is cast in the 
+      form of a character array by memcpy(), passed by reference as that, and then
+      "decapsulated" from the caller function back to a procinfo object, that 
+      can be referenced with its original fields(e.g. procinfo->thread_count)
+  */
   memcpy(buf,&prinfoCB->process_info,sizeof(prinfoCB->process_info));
-  
+    
+  /*  Increment the counter to move to the next PT cell when we are called again*/  
   prinfoCB->PT_cursor++;
 
+  /*  Return how many characters we sent back to the caller*/
   return sizeof(prinfoCB->process_info);
 
 }
 
+/*   We cannot use write() with procinfo, so it is returning -1 as an error by default */
 int procinfo_write(void* procinfo, const char *buf, unsigned int size){
   return -1;
 }
 
+/*  Releases the memory that the proc_info structre takes.*/
 int procinfo_close(void* info){         
+  /*  Cast the proc_info back to a procinfo pointer */
   procinfo_CB* proc_info = (procinfo_CB*) info;  
 
   if (proc_info == NULL)  // if already NULL we may not be able to free it
