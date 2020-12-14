@@ -49,5 +49,7 @@ Working with the code, at the basic level, requires a recent GCC compiler (with 
 standard packages `doxygen` and `valgrind` with their dependencies (e.g., `graphviz`) are also needed 
 for anything serious, as well as the GDB debugger.
 
+[![Hits](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2Fgjbae1212%2Fhit-counter&count_bg=%234C1B82&title_bg=%230079B8&icon=&icon_color=%23E7E7E7&title=uvisited%3F&edge_flat=false)](https://hits.seeyoufarm.com)
+
 
 
