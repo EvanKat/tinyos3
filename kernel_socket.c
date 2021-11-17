@@ -391,24 +391,7 @@ int sys_ShutDown(Fid_t sock, shutdown_mode how)
 
 	int ret;  /*the return value*/
 
-	switch(how){
-		case SHUTDOWN_READ:
-			if(!(ret = pipe_reader_close(socket_cb->peer_s.read_pipe)))
-				socket_cb->peer_s.read_pipe = NULL;
-			return ret;
-		case SHUTDOWN_WRITE:
-			if(!(ret = pipe_writer_close(socket_cb->peer_s.write_pipe)))
-				socket_cb->peer_s.write_pipe = NULL;
-			return ret;
-		case SHUTDOWN_BOTH:
-			if(!(ret = ( pipe_reader_close(socket_cb->peer_s.read_pipe) && pipe_writer_close(socket_cb->peer_s.write_pipe)))){
-				socket_cb->peer_s.write_pipe = NULL;
-				socket_cb->peer_s.read_pipe = NULL;
-			}
-			return ret;
-		default:
-			return -1;
-	}
+
 	return -1;
 }
 
